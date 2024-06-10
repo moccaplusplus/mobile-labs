@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Multiplication</string>
+    <string name="check_it">Check it</string>
+    <string name="placeholder">\?</string>
+    <string name="operation">%1$d * %2$d</string>
+    <string name="success">Success!</string>
+    <string name="wrong">Wrong. Try again!</string>
+    <string name="close">Close</string>
+</resources>

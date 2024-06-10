@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="SquareView" parent="TextView">
+        <attr name="textSize" format="dimension" />
+        <attr name="xSize" format="integer" />
+        <attr name="ySize" format="integer" />
+    </declare-styleable>
+</resources>

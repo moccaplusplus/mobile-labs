@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="18dp"
+    tools:context=".ParametersActivity">
+
+    <GridLayout
+        android:id="@+id/form_grid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:columnCount="2"
+        android:rowCount="2">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_marginEnd="10dp"
+            android:gravity="fill"
+            android:labelFor="@+id/maze_size"
+            android:text="@string/maze_size"
+            android:theme="@style/TextSize" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:gravity="fill"
+            android:labelFor="@+id/maze_select"
+            android:text="@string/selected_maze"
+            android:theme="@style/TextSize" />
+
+        <NumberPicker
+            android:id="@+id/maze_size"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:layout_marginEnd="10dp"
+            android:gravity="fill"
+            android:maxLines="1"
+            android:descendantFocusability="blocksDescendants"
+            android:theme="@style/TextSize" />
+
+        <NumberPicker
+            android:id="@+id/maze_select"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:gravity="fill"
+            android:maxLines="1"
+            android:descendantFocusability="blocksDescendants"
+            android:theme="@style/TextSize" />
+    </GridLayout>
+
+    <LinearLayout
+        android:id="@+id/maze_box"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/buttons"
+        android:layout_below="@id/form_grid"
+        android:layout_marginTop="18dp"
+        android:layout_marginBottom="18dp"
+        android:gravity="center">
+
+        <uksw.android.maze.view.MazeView
+            android:id="@+id/maze_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/buttons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentBottom="true"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/btn_generate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/generate" />
+
+        <Button
+            android:id="@+id/btn_edit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/edit_selected" />
+
+        <Button
+            android:id="@+id/btn_remove"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/remove_selected" />
+
+        <Button
+            android:id="@+id/btn_quit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/quit" />
+    </LinearLayout>
+
+</RelativeLayout>

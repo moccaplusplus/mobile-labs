@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">Maze</string>
+    <string name="generator">Generator</string>
+    <string name="game">Game</string>
+    <string name="parameters">Parameters</string>
+    <string name="generate">Generate</string>
+    <string name="save">Save</string>
+    <string name="quit">Quit</string>
+    <string name="maze_name">Name: </string>
+    <string name="saving_prefs">Saving Parameters…</string>
+    <string name="prefs_saved">Parameters Saved</string>
+    <string name="prefs_save_error">Saving Parameters Failed</string>
+    <string name="edit_selected">Edit Selected</string>
+    <string name="remove_selected">Remove Selected</string>
+    <string name="maze_size">Maze Size</string>
+    <string name="selected_maze">Selected Maze</string>
+    <string name="size_info">Size range: [5, 30]</string>
+    <string name="close">Close</string>
+    <string name="congratulations">Congratulations!</string>
+    <string name="congratulations_message">You reached the maze exit!</string>
+    <string name="no_maze_selected">No Maze Selected!</string>
+    <string name="no_maze_game_message">Select maze in the Parameters activity before starting game.</string>
+    <string name="no_maze_generated">No Maze Generated!</string>
+    <string name="maze_not_saved">Maze is not saved!</string>
+    <string name="quit_anyway">Do You want to quit anyway?</string>
+    <string name="no">No</string>
+    <string name="yes">Yes</string>
+    <string name="name_is_empty">Maze name is not filled!</string>
+</resources>
