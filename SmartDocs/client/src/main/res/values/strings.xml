@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">SmartDocsClient</string>
+    <string name="discover_server">Discover Server</string>
+</resources>
