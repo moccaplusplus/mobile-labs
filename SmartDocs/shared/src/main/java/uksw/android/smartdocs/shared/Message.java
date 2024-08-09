@@ -31,7 +31,7 @@ public class Message {
         this.type = type;
     }
 
-    protected void write(DataOutputStream out) throws IOException {
+    public void write(DataOutputStream out) throws IOException {
         out.writeByte(type);
     }
 }

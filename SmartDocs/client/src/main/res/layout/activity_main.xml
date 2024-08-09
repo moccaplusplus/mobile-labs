@@ -4,12 +4,55 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:layout_margin="18dp"
+    android:orientation="vertical"
     tools:context=".MainActivity">
 
-    <Button
-        android:id="@+id/button_discover"
+    <EditText
+        android:id="@+id/input_host"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/discover_server" />
+        android:layout_marginBottom="8dp"
+        android:textSize="18sp"
+        android:hint="@string/hint_host"
+        android:importantForAutofill="no"
+        android:inputType="none" />
+
+    <Button
+        android:id="@+id/button_save"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        android:text="@string/save_host" />
+
+    <Button
+        android:id="@+id/button_sync"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/request_sync" />
+
+    <Button
+        android:id="@+id/button_create"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/create_file" />
+
+    <Button
+        android:id="@+id/button_edit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/edit_file" />
+
+    <Button
+        android:id="@+id/button_col_lab"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/start_col_lab" />
+
+    <Button
+        android:id="@+id/button_remove"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/remove_file" />
 
 </LinearLayout>
