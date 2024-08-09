@@ -1,70 +1,103 @@
 package uksw.android.smartdocs.client;
 
-import static android.net.nsd.NsdManager.PROTOCOL_DNS_SD;
-import static uksw.android.smartdocs.shared.SmartDocsNsd.SERVICE_TYPE;
-
 import android.app.Service;
 import android.content.Intent;
-import android.net.nsd.NsdManager;
-import android.net.nsd.NsdServiceInfo;
-import android.os.Binder;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
-public class ClientService extends Service implements NsdManager.DiscoveryListener {
-    public class ClientBinder extends Binder {
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.concurrent.CancellationException;
+
+import uksw.android.smartdocs.shared.HostAndPort;
+
+public class ClientService extends Service {
+    public interface Listener {
+        void onServerDiscoveryStarted();
+
+        void onServerDiscovered(HostAndPort hostAndPort);
+
+        void onUdpError(Exception error);
     }
 
-    private NsdManager nsdManager;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final BinderImpl<ClientService> binder = new BinderImpl<>(this);
+    private final Collection<Listener> clientListeners = new LinkedHashSet<>();
+    private UdpClient udpClient;
+    private TcpClientSessions tcpClientSessions;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        nsdManager = (NsdManager) getSystemService(NSD_SERVICE);
-        nsdManager.discoverServices(
-                SERVICE_TYPE, PROTOCOL_DNS_SD, this);
+        udpClient = new UdpClient(this, mainHandler,
+                this::onServerDiscovered, this::onUpdateNotification, this::onUdpError);
+        tcpClientSessions = new TcpClientSessions(() -> new TcpClient(udpClient.ensureDiscoveryResult()));
     }
 
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        return new ClientBinder();
+        return binder;
     }
 
     @Override
     public void onDestroy() {
-        nsdManager.stopServiceDiscovery(this);
+        udpClient.stop();
+        udpClient = null;
+        tcpClientSessions.close();
+        tcpClientSessions = null;
+        clientListeners.clear();
         super.onDestroy();
     }
 
-    @Override
-    public void onStartDiscoveryFailed(String serviceType, int errorCode) {
+    public void addDiscoveryListener(Listener discoveryListener) {
+        clientListeners.add(discoveryListener);
+    }
+
+    public void removeDiscoverListener(Listener discoveryListener) {
+        clientListeners.remove(discoveryListener);
+    }
+
+    public void startDiscovery(boolean forceRestart) {
+        if (forceRestart || !udpClient.isRunning()) {
+            onServerDiscoveryStarted();
+            udpClient.start();
+        }
 
     }
 
-    @Override
-    public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-
+    private void onServerDiscoveryStarted() {
+        showToast("Running Server Discovery...");
+        for (Listener listener : clientListeners) {
+            listener.onServerDiscoveryStarted();
+        }
     }
 
-    @Override
-    public void onDiscoveryStarted(String serviceType) {
-
+    private void onServerDiscovered(HostAndPort hostAndPort) {
+        showToast("Server Discovered: " + hostAndPort);
+        for (Listener listener : clientListeners) {
+            listener.onServerDiscovered(hostAndPort);
+        }
     }
 
-    @Override
-    public void onDiscoveryStopped(String serviceType) {
-
+    private void onUpdateNotification(Void v) {
+        // TODO
     }
 
-    @Override
-    public void onServiceFound(NsdServiceInfo serviceInfo) {
-
+    private void onUdpError(Exception error) {
+        if (!(error instanceof CancellationException)) {
+            showToast("Udp Server Error: " + error.getMessage());
+            for (Listener listener : clientListeners) {
+                listener.onUdpError(error);
+            }
+        }
     }
 
-    @Override
-    public void onServiceLost(NsdServiceInfo serviceInfo) {
-
+    private void showToast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 }
