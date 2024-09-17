@@ -1,12 +1,12 @@
 package uksw.android.smartdocs.client;
 
-import static uksw.android.smartdocs.shared.Discovery.ADDRESS;
-import static uksw.android.smartdocs.shared.Discovery.DISCOVERY_REQUEST;
-import static uksw.android.smartdocs.shared.Discovery.HEADER;
-import static uksw.android.smartdocs.shared.Discovery.UDP_SERVER_PORT;
-import static uksw.android.smartdocs.shared.Discovery.getBytes;
-import static uksw.android.smartdocs.shared.Discovery.getMessage;
+import static uksw.android.smartdocs.shared.Net.getBroadcastAddresses;
 import static uksw.android.smartdocs.shared.Net.getLocalAddress;
+import static uksw.android.smartdocs.shared.Udp.MSG_HANDSHAKE_CLIENT;
+import static uksw.android.smartdocs.shared.Udp.MSG_HANDSHAKE_SERVER;
+import static uksw.android.smartdocs.shared.Udp.MSG_UPDATE_BROADCAST_HEADER;
+import static uksw.android.smartdocs.shared.Udp.getBytes;
+import static uksw.android.smartdocs.shared.Udp.getMessage;
 
 import android.Manifest;
 import android.content.Context;
@@ -19,15 +19,13 @@ import androidx.core.util.Consumer;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.InterfaceAddress;
-import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 
 import uksw.android.smartdocs.shared.HostAndPort;
+import uksw.android.smartdocs.shared.Settings;
 
 public class UdpClient {
     private static final int DISCOVERY_TIMEOUT_MILLIS = 7500;
@@ -78,15 +76,17 @@ public class UdpClient {
 
     public void start() {
         stop();
+        int udpPort = Settings.get(context).getUdpServerPort();
         try {
-            udpSocket = new DatagramSocket();
+            udpSocket = new DatagramSocket(udpPort + 1); // plus 1 only for emulator
+            udpSocket.setBroadcast(true);
         } catch (SocketException e) {
             handler.post(() -> errorListener.accept(e));
             return;
         }
         countDownLatch = new CountDownLatch(1);
         udpThread = new Thread(() -> {
-            if (discover(udpSocket, countDownLatch)) {
+            if (discover(udpSocket, udpPort, countDownLatch)) {
                 listenForUpdates(udpSocket);
             }
         });
@@ -107,22 +107,26 @@ public class UdpClient {
         }
     }
 
-    private boolean discover(DatagramSocket socket, CountDownLatch latch) {
+    private boolean discover(DatagramSocket socket, int udpPort, CountDownLatch latch) {
         try {
-            socket.setBroadcast(true);
             socket.setSoTimeout(DISCOVERY_TIMEOUT_MILLIS);
 
             List<InetAddress> broadcastAddresses = getBroadcastAddresses(getLocalAddress(context));
+            byte[] handshakeBytes = getBytes(MSG_HANDSHAKE_CLIENT);
             for (InetAddress broadcastAddress : broadcastAddresses) {
-                socket.send(broadcastRequest(broadcastAddress));
+                DatagramPacket packet = new DatagramPacket(
+                        handshakeBytes, 0, handshakeBytes.length, broadcastAddress, udpPort);
+                socket.send(packet);
             }
             byte[] responseBuffer = new byte[128];
             while (true) {
                 DatagramPacket response = new DatagramPacket(responseBuffer, responseBuffer.length);
                 socket.receive(response);
                 String message = getMessage(response);
-                if (isDiscoveryResponseMessage(message)) {
-                    hostAndPort = new HostAndPort(response.getAddress(), getTcpPort(message));
+                if (message.startsWith(MSG_HANDSHAKE_SERVER)) {
+                    String payload = message.substring(MSG_HANDSHAKE_SERVER.length()).trim();
+                    int tcpPort = Integer.parseInt(payload);
+                    hostAndPort = new HostAndPort(response.getAddress(), tcpPort);
                     latch.countDown();
                     handler.post(() -> discoveryListener.accept(hostAndPort));
                     return true;
@@ -142,14 +146,13 @@ public class UdpClient {
     @SuppressWarnings("InfiniteLoopStatement")
     private void listenForUpdates(DatagramSocket socket) {
         try {
-            socket.setBroadcast(false);
             socket.setSoTimeout(0);
             byte[] responseBuffer = new byte[128];
             while (true) {
                 DatagramPacket response = new DatagramPacket(responseBuffer, responseBuffer.length);
                 socket.receive(response);
                 String message = getMessage(response);
-                if (isUpdateNotificationMessage(message)) {
+                if (message.startsWith(MSG_UPDATE_BROADCAST_HEADER)) {
                     updateListener.accept(null); // TODO: add update info
                 }
             }
@@ -159,38 +162,5 @@ public class UdpClient {
                 handler.post(() -> errorListener.accept(e));
             }
         }
-    }
-
-    private int getTcpPort(String message) {
-        int headersLength = HEADER.length() + ADDRESS.length();
-        String payload = message.substring(headersLength).trim();
-        return Integer.parseInt(payload.trim());
-    }
-
-    private boolean isUpdateNotificationMessage(String message) {
-        return false;
-    }
-
-    private boolean isDiscoveryResponseMessage(String message) {
-        return message.startsWith(HEADER + ADDRESS);
-    }
-
-    private DatagramPacket broadcastRequest(InetAddress broadcastAddress) {
-        byte[] bytes = getBytes(DISCOVERY_REQUEST);
-        return new DatagramPacket(
-                bytes, 0, bytes.length, broadcastAddress, UDP_SERVER_PORT);
-    }
-
-    private static List<InetAddress> getBroadcastAddresses(InetAddress localAddress) throws SocketException {
-        NetworkInterface networkInterface = NetworkInterface.getByInetAddress(localAddress);
-        List<InterfaceAddress> addresses = networkInterface.getInterfaceAddresses();
-        List<InetAddress> broadcastAddresses = new ArrayList<>();
-        for (InterfaceAddress address : addresses) {
-            InetAddress broadcastAddress = address.getBroadcast();
-            if (broadcastAddress != null) {
-                broadcastAddresses.add(broadcastAddress);
-            }
-        }
-        return broadcastAddresses;
     }
 }

@@ -5,4 +5,6 @@
     <string name="list_managed_files">List Managed Files</string>
     <string name="status_label">Status: %1$s</string>
     <string name="status_toast">SmartDocs Server: %1$s</string>
+    <string name="invalid_port">Invalid port value.</string>
+    <string name="invalid_port_msg">Cannot start server. Please provide valid port value.</string>
 </resources>

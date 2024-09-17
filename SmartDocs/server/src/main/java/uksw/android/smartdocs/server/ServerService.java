@@ -1,7 +1,7 @@
 package uksw.android.smartdocs.server;
 
 import static java.lang.String.format;
-import static uksw.android.smartdocs.shared.Discovery.TCP_SERVER_PORT;
+import static uksw.android.smartdocs.shared.Net.getBroadcastAddresses;
 import static uksw.android.smartdocs.shared.Net.getLocalAddress;
 import static uksw.android.smartdocs.shared.UiHelper.runOnUiThread;
 
@@ -26,21 +26,23 @@ import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
-
-import uksw.android.smartdocs.shared.Discovery;
-import uksw.android.smartdocs.shared.Toasts;
-import uksw.android.smartdocs.shared.UiHelper;
+import java.util.List;
 
 public class ServerService extends Service {
     public static final String ACTION_REQUEST_STATUS = "action.smart-docs.request.status";
     public static final String ACTION_BROADCAST_STATUS = "action.smart-docs.broadcast.status";
     public static final String EXTRA_STATUS = "status";
     public static final String EXTRA_STATUS_MSG = "status-msg";
+    public static final String EXTRA_UDP_PORT = "udp-port";
     public static final int STATUS_STARTED = 1;
+    public static final int STATUS_STARTING = 2;
     public static final int STATUS_STOPPED = 0;
-    public static final int STATUS_ERROR = 2;
+    public static final int STATUS_ERROR = -1;
+
+    private static final int FOREGROUND_ID = 12345;
 
     private final BroadcastReceiver serverReceiver = new BroadcastReceiver() {
         @Override
@@ -60,7 +62,7 @@ public class ServerService extends Service {
         super.onCreate();
         int foregroundType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ?
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC : 0;
-        ServiceCompat.startForeground(this, 12345, createNotification(), foregroundType);
+        ServiceCompat.startForeground(this, FOREGROUND_ID, createNotification(), foregroundType);
         IntentFilter filter = new IntentFilter(ACTION_REQUEST_STATUS);
         ContextCompat.registerReceiver(
                 this, serverReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
@@ -70,15 +72,17 @@ public class ServerService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         super.onStartCommand(intent, flags, startId);
         if (status == STATUS_STOPPED) {
+            updateStatus(STATUS_STARTING, "Starting server...");
+            int udpServerPort = intent.getIntExtra(EXTRA_UDP_PORT, 0);
             try {
+                List<InetAddress> broadcastAddresses = getBroadcastAddresses(getLocalAddress(this));
                 tcpServer = new TcpServer(this::clientHandler, this::onServerError);
                 tcpServer.start();
 
-                String hostAndPort = getHost() + ":" + TCP_SERVER_PORT;
-                udpServer = new UdpServer(hostAndPort, this::onServerError);
+                udpServer = new UdpServer(udpServerPort, tcpServer.getPort(), broadcastAddresses, this::onServerError);
                 udpServer.start();
 
-                updateStatus(STATUS_STARTED, "Running at " + hostAndPort);
+                updateStatus(STATUS_STARTED, "Server is running");
             } catch (IOException e) {
                 onServerError(e);
             }
@@ -96,7 +100,7 @@ public class ServerService extends Service {
             udpServer.stop();
             udpServer = null;
         }
-        updateStatus(STATUS_STOPPED, "Stopped");
+        updateStatus(STATUS_STOPPED, "Server is stopped");
         super.onDestroy();
     }
 

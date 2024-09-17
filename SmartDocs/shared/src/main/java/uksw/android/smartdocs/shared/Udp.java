@@ -4,18 +4,13 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.net.DatagramPacket;
 
-public interface Discovery {
-    int UDP_SERVER_PORT = 9876;
-    int TCP_SERVER_PORT = 9877;
+public interface Udp {
+    int DEFAULT_PORT = 9876;
 
     String HEADER = "SmartDocs\n";
-    String GET_ADDRESS = "GetAddress\n";
-    String ADDRESS = "Address\n";
-    String DISCOVERY_REQUEST = HEADER + GET_ADDRESS;
-
-    static String discoveryResponse(String address) {
-        return HEADER + ADDRESS + address + "\n";
-    }
+    String MSG_HANDSHAKE_CLIENT = HEADER + "Hello From Client\n";
+    String MSG_HANDSHAKE_SERVER = HEADER + "Hello From Server\n";
+    String MSG_UPDATE_BROADCAST_HEADER = HEADER + "Update Broadcast\n";
 
     static String getMessage(DatagramPacket packet) {
         return new String(packet.getData(), 0, packet.getLength(), UTF_8);

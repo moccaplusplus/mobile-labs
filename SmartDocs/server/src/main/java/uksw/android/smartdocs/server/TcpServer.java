@@ -1,7 +1,5 @@
 package uksw.android.smartdocs.server;
 
-import static uksw.android.smartdocs.shared.Discovery.TCP_SERVER_PORT;
-
 import android.util.Log;
 
 import androidx.core.util.Consumer;
@@ -15,8 +13,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import uksw.android.smartdocs.shared.Discovery;
-
 public class TcpServer {
     private final ServerSocket tcpServerSocket;
     private final ExecutorService tcpClientThreadPool;
@@ -27,10 +23,14 @@ public class TcpServer {
     public TcpServer(Consumer<Socket> clientHandler, Consumer<Exception> errorListener) throws IOException {
         this.clientHandler = clientHandler;
         this.errorListener = errorListener;
-        tcpServerSocket = new ServerSocket(TCP_SERVER_PORT);
+        tcpServerSocket = new ServerSocket(0);
         tcpClientThreadPool = Executors.newCachedThreadPool();
         tcpThread = new Thread(this::tcpLoop);
         tcpThread.setDaemon(true);
+    }
+
+    public int getPort() {
+        return tcpServerSocket.getLocalPort();
     }
 
     public void start() {

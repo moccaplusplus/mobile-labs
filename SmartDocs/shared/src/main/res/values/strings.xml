@@ -3,4 +3,6 @@
     <string name="no">No</string>
     <string name="yes">Yes</string>
     <string name="close">Close</string>
+    <string name="udp_port">UDP Server Port</string>
+    <string name="tcp_port">TCP Server Port</string>
 </resources>

@@ -14,12 +14,13 @@ import java.util.LinkedHashSet;
 import java.util.concurrent.CancellationException;
 
 import uksw.android.smartdocs.shared.HostAndPort;
+import uksw.android.smartdocs.shared.Settings;
 
 public class ClientService extends Service {
     public interface Listener {
-        void onServerDiscoveryStarted();
+        void onHandshakeStarted();
 
-        void onServerDiscovered(HostAndPort hostAndPort);
+        void onHandshakeSuccess(HostAndPort hostAndPort);
 
         void onUdpError(Exception error);
     }
@@ -73,14 +74,14 @@ public class ClientService extends Service {
     private void onServerDiscoveryStarted() {
         showToast("Running Server Discovery...");
         for (Listener listener : clientListeners) {
-            listener.onServerDiscoveryStarted();
+            listener.onHandshakeStarted();
         }
     }
 
     private void onServerDiscovered(HostAndPort hostAndPort) {
         showToast("Server Discovered: " + hostAndPort);
         for (Listener listener : clientListeners) {
-            listener.onServerDiscovered(hostAndPort);
+            listener.onHandshakeSuccess(hostAndPort);
         }
     }
 

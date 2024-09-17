@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public interface Net {
-
     @RequiresPermission(Manifest.permission.ACCESS_WIFI_STATE)
     static InetAddress getLocalAddress(Context context) throws UnknownHostException {
         WifiManager wifiManager = (WifiManager) context.getApplicationContext().getSystemService(WIFI_SERVICE);
@@ -33,5 +32,18 @@ public interface Net {
         int addressIp = wifiManager.getConnectionInfo().getIpAddress();
         byte[] addressBytes = ByteBuffer.allocate(4).order(LITTLE_ENDIAN).putInt(addressIp).array();
         return InetAddress.getByAddress(addressBytes);
+    }
+
+    static List<InetAddress> getBroadcastAddresses(InetAddress localAddress) throws SocketException {
+        NetworkInterface networkInterface = NetworkInterface.getByInetAddress(localAddress);
+        List<InterfaceAddress> addresses = networkInterface.getInterfaceAddresses();
+        List<InetAddress> broadcastAddresses = new ArrayList<>();
+        for (InterfaceAddress address : addresses) {
+            InetAddress broadcastAddress = address.getBroadcast();
+            if (broadcastAddress != null) {
+                broadcastAddresses.add(broadcastAddress);
+            }
+        }
+        return broadcastAddresses;
     }
 }

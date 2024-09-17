@@ -4,16 +4,16 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Button;
-import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import uksw.android.smartdocs.shared.HostAndPort;
+import uksw.android.smartdocs.shared.SettingsView;
 
 public class MainActivity extends AppCompatActivity implements BinderImpl.Connection<ClientService>, ClientService.Listener {
-    private TextView serverInfo;
-    private Button settingsButton;
+    //    private TextView serverInfo;
+    private SettingsView settingsView;
     private Button syncButton;
     private Button createButton;
     private Button editButton;
@@ -38,7 +38,7 @@ public class MainActivity extends AppCompatActivity implements BinderImpl.Connec
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        settingsButton = findViewById(R.id.button_settings);
+        settingsView = findViewById(R.id.settings_view);
         syncButton = findViewById(R.id.button_sync);
         createButton = findViewById(R.id.button_create);
         editButton = findViewById(R.id.button_edit);
@@ -67,7 +67,7 @@ public class MainActivity extends AppCompatActivity implements BinderImpl.Connec
 
     private void updateButtonStates() {
         boolean connected = clientService != null;
-        settingsButton.setEnabled(connected);
+        settingsView.setEnabled(!connected);
         syncButton.setEnabled(connected);
         createButton.setEnabled(connected);
         editButton.setEnabled(connected);
@@ -96,12 +96,12 @@ public class MainActivity extends AppCompatActivity implements BinderImpl.Connec
     }
 
     @Override
-    public void onServerDiscoveryStarted() {
-        serverInfo.setText("");
+    public void onHandshakeStarted() {
+//        serverInfo.setText("");
     }
 
     @Override
-    public void onServerDiscovered(HostAndPort hostAndPort) {
+    public void onHandshakeSuccess(HostAndPort hostAndPort) {
 
     }
 
