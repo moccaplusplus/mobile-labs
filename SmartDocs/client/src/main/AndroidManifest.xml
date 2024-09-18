@@ -14,8 +14,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SmartDocs">
         <provider
-            android:name=".SmartDocsClientProvider"
-            android:authorities="uksw.android.smartdocs.client"
+            android:name=".SmartDocsProvider"
+            android:authorities="uksw.android.smartdocs"
             android:permission="android.permission.MANAGE_DOCUMENTS"
             android:grantUriPermissions="true"
             android:enabled="true"
@@ -28,12 +28,12 @@
         <activity
             android:name=".EditorActivity"
             android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

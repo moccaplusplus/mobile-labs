@@ -2,44 +2,51 @@ package uksw.android.smartdocs.client;
 
 import android.app.Service;
 import android.content.Intent;
+import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
-
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.concurrent.CancellationException;
 
-import uksw.android.smartdocs.shared.HostAndPort;
-import uksw.android.smartdocs.shared.Settings;
-
 public class ClientService extends Service {
-    public interface Listener {
-        void onHandshakeStarted();
+    public static class BinderImpl extends Binder {
+        private final ClientService clientService;
 
-        void onHandshakeSuccess(HostAndPort hostAndPort);
+        public BinderImpl(ClientService clientService) {
+            this.clientService = clientService;
+        }
 
-        void onUdpError(Exception error);
+        public ClientService getService() {
+            return clientService;
+        }
     }
 
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final BinderImpl<ClientService> binder = new BinderImpl<>(this);
-    private final Collection<Listener> clientListeners = new LinkedHashSet<>();
+    public static final int STATUS_DISCONNECTED = 0;
+    public static final int STATUS_CONNECTED = 1;
+    public static final int STATUS_CONNECTING = 2;
+
+    public interface StatusListener {
+        void onConnectionStatus(int status);
+    }
+
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private final BinderImpl binder = new BinderImpl(this);
+    private final Collection<StatusListener> statusListeners = new LinkedHashSet<>();
     private UdpClient udpClient;
     private TcpClientSessions tcpClientSessions;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        udpClient = new UdpClient(this, mainHandler,
-                this::onServerDiscovered, this::onUpdateNotification, this::onUdpError);
-        tcpClientSessions = new TcpClientSessions(() -> new TcpClient(udpClient.ensureDiscoveryResult()));
+        udpClient = new UdpClient(this, uiHandler,
+                this::onHandshake, this::onUpdateNotification, this::onUdpError);
+        tcpClientSessions = new TcpClientSessions(() -> new TcpClient(udpClient.ensureHandshake()));
     }
 
-    @Nullable
     @Override
     public IBinder onBind(Intent intent) {
         return binder;
@@ -51,38 +58,39 @@ public class ClientService extends Service {
         udpClient = null;
         tcpClientSessions.close();
         tcpClientSessions = null;
-        clientListeners.clear();
+        statusListeners.clear();
         super.onDestroy();
     }
 
-    public void addDiscoveryListener(Listener discoveryListener) {
-        clientListeners.add(discoveryListener);
+    public void addStatusListener(StatusListener discoveryListener) {
+        discoveryListener.onConnectionStatus(inferConnectionStatus());
+        statusListeners.add(discoveryListener);
     }
 
-    public void removeDiscoverListener(Listener discoveryListener) {
-        clientListeners.remove(discoveryListener);
+    public void removeStatusListener(StatusListener discoveryListener) {
+        statusListeners.remove(discoveryListener);
     }
 
-    public void startDiscovery(boolean forceRestart) {
-        if (forceRestart || !udpClient.isRunning()) {
-            onServerDiscoveryStarted();
+    public void connectServer() {
+        if (!udpClient.isRunning()) {
+            notifyConnectionStatusChange(STATUS_CONNECTING);
             udpClient.start();
         }
-
     }
 
-    private void onServerDiscoveryStarted() {
-        showToast("Running Server Discovery...");
-        for (Listener listener : clientListeners) {
-            listener.onHandshakeStarted();
+    public void disconnectServer() {
+        if (udpClient.isRunning()) {
+            udpClient.stop();
         }
     }
 
-    private void onServerDiscovered(HostAndPort hostAndPort) {
+    public void requestSync() {
+        // TODO
+    }
+
+    private void onHandshake(HostAndPort hostAndPort) {
         showToast("Server Discovered: " + hostAndPort);
-        for (Listener listener : clientListeners) {
-            listener.onHandshakeSuccess(hostAndPort);
-        }
+        notifyConnectionStatusChange(STATUS_CONNECTED);
     }
 
     private void onUpdateNotification(Void v) {
@@ -92,10 +100,20 @@ public class ClientService extends Service {
     private void onUdpError(Exception error) {
         if (!(error instanceof CancellationException)) {
             showToast("Udp Server Error: " + error.getMessage());
-            for (Listener listener : clientListeners) {
-                listener.onUdpError(error);
-            }
         }
+        notifyConnectionStatusChange(STATUS_DISCONNECTED);
+    }
+
+    private void notifyConnectionStatusChange(int status) {
+        for (StatusListener listener : statusListeners) {
+            listener.onConnectionStatus(status);
+        }
+    }
+
+    private int inferConnectionStatus() {
+        return udpClient.isConnected() ?
+                STATUS_CONNECTED : udpClient.isConnecting() ?
+                STATUS_CONNECTING : STATUS_DISCONNECTED;
     }
 
     private void showToast(String message) {

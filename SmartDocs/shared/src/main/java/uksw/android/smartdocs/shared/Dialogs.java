@@ -14,6 +14,12 @@ public class Dialogs {
         builder(context, context.getString(title), context.getString(message)).show();
     }
 
+    public static void alert(Context context, @StringRes int title, @StringRes int message, Runnable onClose) {
+        builder(context, context.getString(title), context.getString(message))
+                .setOnCancelListener(dialog -> onClose.run())
+                .show();
+    }
+
     public static void confirm(Context context, @StringRes int title, @StringRes int message, Runnable onConfirm) {
         builder(context, context.getString(title), context.getString(message))
                 .setNegativeButton(R.string.no, (dialog, which) -> dialog.cancel())

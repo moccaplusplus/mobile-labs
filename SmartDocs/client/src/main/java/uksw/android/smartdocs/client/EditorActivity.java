@@ -1,70 +1,74 @@
 package uksw.android.smartdocs.client;
 
-import android.content.Intent;
+import static uksw.android.smartdocs.shared.Dialogs.alert;
+
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.provider.DocumentsContract;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 
+import uksw.android.smartdocs.shared.Dialogs;
+
 public class EditorActivity extends AppCompatActivity {
-    private Uri file;
     private EditText editor;
+    private Button saveButton;
+    private Uri uri;
+    private TextView titleView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_editor);
+        titleView = findViewById(R.id.title_text);
         editor = findViewById(R.id.edit_text);
-        findViewById(R.id.button_save).setOnClickListener(v -> saveAs());
+        saveButton = findViewById(R.id.button_save);
+        saveButton.setOnClickListener(v -> save());
+        findViewById(R.id.button_close).setOnClickListener(v -> finish());
     }
 
-    private void saveAs() {
-        Uri uri = DocumentsContract.buildDocumentUri("uksw.android.smartdocs.client", "root");
-        createFile(uri);
+    @Override
+    protected void onStart() {
+        super.onStart();
+        uri = getIntent().getData();
+        if (uri == null) {
+            alert(this, R.string.error, R.string.missing_uri, this::finish);
+            return;
+        }
 
-//        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-//            intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, uriToLoad);
-//        }
-//
-//        startActivityForResult(intent, your-request-code);
-
-        editor.getText();
+        titleView.setText(getString(R.string.file_name, uri.getLastPathSegment()));
+        saveButton.setEnabled(true);
+        readFile();
     }
 
     private void save() {
-        if (file == null) {
-
-            return;
-        }
         String content = editor.getText().toString();
         try (BufferedWriter writer = new BufferedWriter(
-                new OutputStreamWriter(getContentResolver().openOutputStream(file)))) {
+                new OutputStreamWriter(getContentResolver().openOutputStream(uri)))) {
             writer.write(content);
+            alert(this, R.string.file_saved);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            alert(this, R.string.error, R.string.failed_write_file);
         }
     }
 
-    private void createFile(Uri directory) {
-//        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-//        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType(SmartDocsClientProvider.SMART_DOC_MIME_TYPE);
-//        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, directory);
-
-        startActivityForResult(intent, 123);
+    private void readFile() {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(getContentResolver().openInputStream(uri)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                editor.append(line);
+            }
+        } catch (IOException e) {
+            alert(this, R.string.error, R.string.failed_read_file);
+        }
     }
 }

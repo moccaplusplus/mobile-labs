@@ -24,11 +24,11 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 
-import uksw.android.smartdocs.shared.HostAndPort;
 import uksw.android.smartdocs.shared.Settings;
 
 public class UdpClient {
     private static final int DISCOVERY_TIMEOUT_MILLIS = 7500;
+    private final byte[] responseBuffer = new byte[2054];
     private final Context context;
     private final Handler handler;
     private final Consumer<HostAndPort> discoveryListener;
@@ -38,7 +38,7 @@ public class UdpClient {
     private DatagramSocket udpSocket;
     private CountDownLatch countDownLatch;
     private HostAndPort hostAndPort;
-    private Exception error;
+    private Exception handshakeError;
 
     @RequiresPermission(Manifest.permission.ACCESS_WIFI_STATE)
     public UdpClient(
@@ -52,24 +52,24 @@ public class UdpClient {
     }
 
     public boolean isRunning() {
-        return isDiscovering() || isListeningForUpdates();
+        return isConnecting() || isConnected();
     }
 
-    public boolean isDiscovering() {
+    public boolean isConnecting() {
         return countDownLatch != null && countDownLatch.getCount() > 0;
     }
 
-    public boolean isListeningForUpdates() {
+    public boolean isConnected() {
         return hostAndPort != null && udpSocket != null && !udpSocket.isClosed();
     }
 
-    public HostAndPort ensureDiscoveryResult() throws Exception {
-        if (countDownLatch == null || error != null) {
+    public HostAndPort ensureHandshake() throws Exception {
+        if (countDownLatch == null || handshakeError != null) {
             start();
         }
         countDownLatch.await();
-        if (error != null) {
-            throw error;
+        if (handshakeError != null) {
+            throw handshakeError;
         }
         return hostAndPort;
     }
@@ -86,7 +86,7 @@ public class UdpClient {
         }
         countDownLatch = new CountDownLatch(1);
         udpThread = new Thread(() -> {
-            if (discover(udpSocket, udpPort, countDownLatch)) {
+            if (handshake(udpSocket, udpPort, countDownLatch)) {
                 listenForUpdates(udpSocket);
             }
         });
@@ -96,7 +96,8 @@ public class UdpClient {
 
     public void stop() {
         hostAndPort = null;
-        error = null;
+        handshakeError = null;
+        countDownLatch = null;
         if (udpThread != null) {
             udpThread.interrupt();
             udpThread = null;
@@ -107,7 +108,7 @@ public class UdpClient {
         }
     }
 
-    private boolean discover(DatagramSocket socket, int udpPort, CountDownLatch latch) {
+    private boolean handshake(DatagramSocket socket, int udpPort, CountDownLatch latch) {
         try {
             socket.setSoTimeout(DISCOVERY_TIMEOUT_MILLIS);
 
@@ -133,9 +134,9 @@ public class UdpClient {
                 }
             }
         } catch (Exception e) {
-            Log.e("SmartDocs", "Discovery error", e);
+            Log.e("SmartDocs", "Handshake error", e);
             Exception error = Thread.currentThread().isInterrupted() ? new CancellationException() : e;
-            this.error = error;
+            handshakeError = error;
             latch.countDown();
             handler.post(() -> errorListener.accept(error));
             udpSocket.close();
@@ -147,7 +148,6 @@ public class UdpClient {
     private void listenForUpdates(DatagramSocket socket) {
         try {
             socket.setSoTimeout(0);
-            byte[] responseBuffer = new byte[128];
             while (true) {
                 DatagramPacket response = new DatagramPacket(responseBuffer, responseBuffer.length);
                 socket.receive(response);
@@ -158,9 +158,8 @@ public class UdpClient {
             }
         } catch (Exception e) {
             Log.e("SmartDocs", "Udp loop error", e);
-            if (!Thread.currentThread().isInterrupted()) {
-                handler.post(() -> errorListener.accept(e));
-            }
+            Exception error = Thread.currentThread().isInterrupted() ? new CancellationException() : e;
+            handler.post(() -> errorListener.accept(error));
         }
     }
 }

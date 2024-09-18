@@ -4,8 +4,10 @@ import static android.os.Build.VERSION.SDK_INT;
 import static android.provider.DocumentsContract.Document;
 import static android.provider.DocumentsContract.Root;
 
+import android.content.Context;
 import android.database.Cursor;
 import android.database.MatrixCursor;
+import android.net.Uri;
 import android.os.Build;
 import android.os.CancellationSignal;
 import android.os.Handler;
@@ -24,8 +26,11 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
-public class SmartDocsClientProvider extends DocumentsProvider {
-    public static final String SMART_DOC_MIME_TYPE = "text/vnd.uksw.android.smartdocs.document";
+public class SmartDocsProvider extends DocumentsProvider {
+    public static final String DOCUMENT_MIME_TYPE = "text/plain";
+    public static final String AUTHORITY = "uksw.android.smartdocs";
+    public static final String ROOT = "smart-docs";
+    public static final Uri ROOT_DOCUMENT_URI = DocumentsContract.buildDocumentUri(AUTHORITY, ROOT);
 
     private static final String[] DEFAULT_ROOT_PROJECTION = new String[]{
             Root.COLUMN_ROOT_ID,
@@ -37,8 +42,6 @@ public class SmartDocsClientProvider extends DocumentsProvider {
             Root.COLUMN_AVAILABLE_BYTES
     };
 
-    // Use these as the default columns to return information about a document if no specific
-    // columns are requested in a query.
     private static final String[] DEFAULT_DOCUMENT_PROJECTION = new String[]{
             Document.COLUMN_DOCUMENT_ID,
             Document.COLUMN_MIME_TYPE,
@@ -47,20 +50,29 @@ public class SmartDocsClientProvider extends DocumentsProvider {
             Document.COLUMN_FLAGS,
             Document.COLUMN_SIZE
     };
-    private static final String ROOT_MIME_TYPES = Document.MIME_TYPE_DIR + "\n" + SMART_DOC_MIME_TYPE + "\n";
+    private static final String ROOT_MIME_TYPES = Document.MIME_TYPE_DIR + "\n" + DOCUMENT_MIME_TYPE + "\n";
     private static final int DIR_FLAGS = Document.FLAG_DIR_SUPPORTS_CREATE;
     private static final int DOC_FLAGS = Document.FLAG_SUPPORTS_WRITE | Document.FLAG_SUPPORTS_DELETE;
-    private static final String ROOT = "root";
 
     private final LinkedList<String> recentDocuments = new LinkedList<>();
     private File baseDir;
+    private Handler handler;
 
-    public SmartDocsClientProvider() {
+    public SmartDocsProvider() {
     }
 
+    @SuppressWarnings("DataFlowIssue")
     @Override
     public boolean onCreate() {
-        baseDir = getContext().getFilesDir();
+        Context context = getContext();
+        File filesDir = context.getFilesDir();
+        baseDir = new File(filesDir, "SmartDocsData");
+        if (!baseDir.exists()) {
+            if (!baseDir.mkdir()) {
+                return false;
+            }
+        }
+        handler = new Handler(context.getMainLooper());
         return true;
     }
 
@@ -118,7 +130,6 @@ public class SmartDocsClientProvider extends DocumentsProvider {
         if (isWrite) {
             // Attach a close listener if the document is opened in write mode.
             try {
-                Handler handler = new Handler(getContext().getMainLooper());
                 return ParcelFileDescriptor.open(file, accessMode, handler,
                         e -> Log.i("SmartDocs", "A file with id " + documentId + " has been closed!  Time to " +
                                 "update the server."));
@@ -216,36 +227,27 @@ public class SmartDocsClientProvider extends DocumentsProvider {
             row.add(Document.COLUMN_MIME_TYPE, Document.MIME_TYPE_DIR);
         } else {
             row.add(Document.COLUMN_FLAGS, DOC_FLAGS);
-            row.add(Document.COLUMN_MIME_TYPE, SMART_DOC_MIME_TYPE);
+            row.add(Document.COLUMN_MIME_TYPE, DOCUMENT_MIME_TYPE);
         }
     }
 
     private String getDocIdForFile(File file) {
-        String path = file.getAbsolutePath();
-
-        // Start at first char of path under root
-        final String rootPath = baseDir.getPath();
-        if (rootPath.equals(path)) {
-            path = "";
-        } else if (rootPath.endsWith("/")) {
-            path = path.substring(rootPath.length());
-        } else {
-            path = path.substring(rootPath.length() + 1);
-        }
-
-        return ROOT + ':' + path;
+        String path = cutTrailingSlash(file.getAbsolutePath());
+        String rootPath = cutTrailingSlash(baseDir.getPath());
+        return rootPath.equals(path) ?
+                ROOT : ROOT + '/' + path.substring(rootPath.length() + 1);
     }
 
     private File getFileForDocId(String documentId) throws FileNotFoundException {
+        documentId = cutTrailingSlash(documentId);
         File target = baseDir;
         if (documentId.equals(ROOT)) {
             return target;
         }
-        final int splitIndex = documentId.indexOf(':', 1);
-        if (splitIndex < 0) {
+        if (!documentId.startsWith(ROOT + "/")) {
             throw new FileNotFoundException("Missing root for " + documentId);
         } else {
-            final String path = documentId.substring(splitIndex + 1);
+            final String path = documentId.substring(ROOT.length() + 1);
             target = new File(target, path);
             if (!target.exists()) {
                 throw new FileNotFoundException("Missing file for " + documentId + " at " + target);
@@ -254,21 +256,14 @@ public class SmartDocsClientProvider extends DocumentsProvider {
         }
     }
 
-    private List<String> getPath(@Nullable String parentDocumentId, String childDocumentId) throws FileNotFoundException {
+    private List<String> getPath(@Nullable String parentDocumentId, String childDocumentId) {
+        childDocumentId = cutTrailingSlash(childDocumentId);
         if (ROOT.equals(childDocumentId)) {
             return Collections.singletonList(ROOT);
         }
-        if (parentDocumentId == null) {
-            parentDocumentId = ROOT;
-        }
-        int cutOffIndex = parentDocumentId.length();
-        if (ROOT.equals(parentDocumentId)) {
-            cutOffIndex++;
-        }
+        parentDocumentId = parentDocumentId == null ? ROOT : cutTrailingSlash(parentDocumentId);
+        int cutOffIndex = parentDocumentId.length() + 1;
         String cutOff = childDocumentId.substring(cutOffIndex);
-        if (cutOff.endsWith("/")) {
-            cutOff = cutOff.substring(0, cutOff.length() - 1);
-        }
 
         String[] items = cutOff.split("/");
         List<String> path = new ArrayList<>();
@@ -279,5 +274,10 @@ public class SmartDocsClientProvider extends DocumentsProvider {
             path.add(documentId);
         }
         return path;
+    }
+
+    private static String cutTrailingSlash(String documentId) {
+        return documentId.endsWith("/") ?
+                documentId.substring(documentId.length() - 1) : documentId;
     }
 }

@@ -5,7 +5,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
-import uksw.android.smartdocs.shared.HostAndPort;
 import uksw.android.smartdocs.shared.Message;
 
 public class TcpClient implements AutoCloseable {

@@ -3,7 +3,6 @@ package uksw.android.smartdocs.server;
 import static java.lang.String.format;
 import static uksw.android.smartdocs.shared.Net.getBroadcastAddresses;
 import static uksw.android.smartdocs.shared.Net.getLocalAddress;
-import static uksw.android.smartdocs.shared.UiHelper.runOnUiThread;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -17,7 +16,9 @@ import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -52,6 +53,7 @@ public class ServerService extends Service {
             }
         }
     };
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private TcpServer tcpServer;
     private UdpServer udpServer;
     private int status = STATUS_STOPPED;
@@ -118,7 +120,7 @@ public class ServerService extends Service {
         Log.i("SmartDocs", format("Server status change %d -> %d", this.status, status));
         this.status = status;
         this.statusInfo = statusInfo;
-        runOnUiThread(() -> Toast.makeText(
+        uiHandler.post(() -> Toast.makeText(
                 this, getString(R.string.status_toast, statusInfo), Toast.LENGTH_SHORT).show());
         broadcastStatus();
     }

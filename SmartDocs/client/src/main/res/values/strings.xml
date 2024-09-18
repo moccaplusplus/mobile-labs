@@ -9,4 +9,20 @@
     <string name="start_col_lab">Start ColLab</string>
     <string name="remove_file">Remove File</string>
     <string name="request_sync">Request Sync</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="service_not_available">Service not available</string>
+    <string name="connected">Connected to SmartDocs</string>
+    <string name="connecting">Connecting to SmartDocs…</string>
+    <string name="disconnected">Disconnected from SmartDocs</string>
+    <string name="legacy_dialog">Android OS Older Version</string>
+    <string name="legacy_dialog_msg">In this version of Android OS EXTRA_INITIAL_URI flag is not supported.\nPlease navigate to SmartDocs root manually.</string>
+    <string name="save">Save</string>
+    <string name="close">Close</string>
+    <string name="failed_read_file">Failed to read file contents</string>
+    <string name="error">Error</string>
+    <string name="failed_write_file">Failed to write file</string>
+    <string name="file_saved">File saved</string>
+    <string name="missing_uri">File URI is missing</string>
+    <string name="file_name">File: %1$s</string>
 </resources>
