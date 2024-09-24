@@ -38,6 +38,10 @@ public class Metadata {
         dirty.edit().remove(name).apply();
     }
 
+    public boolean isDirty(String name) {
+        return dirty.getBoolean(name, false);
+    }
+
     public long getLoadedVersion(String name) {
         return loaded.getLong(name, -1L);
     }

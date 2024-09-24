@@ -1,12 +1,13 @@
 package uksw.android.smartdocs.client;
 
+import static uksw.android.smartdocs.shared.TcpSession.closeSilent;
+
 import android.os.Handler;
 
 import androidx.core.util.Consumer;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -16,51 +17,30 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class TcpSessions implements AutoCloseable {
-    private static final int TIMEOUT_MILLIS = 7500;
+import uksw.android.smartdocs.shared.TcpSession;
 
-    public interface SessionHandler {
+public class TcpClient implements AutoCloseable {
+    public interface SessionCallback {
         void handleSession(DataOutputStream out, DataInputStream in) throws Exception;
     }
 
-    public static class Session implements AutoCloseable {
-        final Socket socket;
-        final DataOutputStream out;
-        final DataInputStream in;
-
-        public Session(Socket socket) throws IOException {
-            this.socket = socket;
-            socket.setSoTimeout(TIMEOUT_MILLIS);
-            in = new DataInputStream(socket.getInputStream());
-            out = new DataOutputStream(socket.getOutputStream());
-        }
-
-        @Override
-        public void close() {
-            closeSilent(out);
-            closeSilent(in);
-            closeSilent(socket);
-        }
-    }
-
-
     private final Handler errorHandler;
     private final ExecutorService threadPool = Executors.newCachedThreadPool();
-    private final Set<Session> activeSessions = Collections.synchronizedSet(new HashSet<>());
+    private final Set<TcpSession> activeSessions = Collections.synchronizedSet(new HashSet<>());
     private final Callable<Socket> socketFactory;
 
-    public TcpSessions(Handler errorHandler, Callable<Socket> socketFactory) {
+    public TcpClient(Handler errorHandler, Callable<Socket> socketFactory) {
         this.errorHandler = errorHandler;
         this.socketFactory = socketFactory;
     }
 
-    public void session(SessionHandler handler, Consumer<Exception> errorListener) {
+    public void session(SessionCallback sessionCallback, Consumer<Exception> errorListener) {
         threadPool.submit(() -> {
-            Session session = null;
+            TcpSession session = null;
             try {
-                session = new Session(socketFactory.call());
+                session = new TcpSession(socketFactory.call());
                 activeSessions.add(session);
-                handler.handleSession(session.out, session.in);
+                sessionCallback.handleSession(session.out, session.in);
             } catch (Exception e) {
                 if (!Thread.currentThread().isInterrupted()) {
                     errorHandler.post(() -> errorListener.accept(e));
@@ -77,16 +57,9 @@ public class TcpSessions implements AutoCloseable {
     @Override
     public void close() {
         threadPool.shutdownNow();
-        for (Session socket : new ArrayList<>(activeSessions)) {
+        for (TcpSession socket : new ArrayList<>(activeSessions)) {
             closeSilent(socket);
         }
         activeSessions.clear();
-    }
-
-    static void closeSilent(AutoCloseable closeable) {
-        try {
-            closeable.close();
-        } catch (Exception ignored) {
-        }
     }
 }

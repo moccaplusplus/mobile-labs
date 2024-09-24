@@ -22,7 +22,6 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -38,7 +37,7 @@ public class UdpClient {
     private final Context context;
     private final Handler handler;
     private final Consumer<Pair<InetAddress, Integer>> handshakeListener;
-    private final Consumer<Collection<FileInfo>> updateListener;
+    private final Consumer<FileInfo> updateListener;
     private final Consumer<Exception> errorListener;
     private Thread udpThread;
     private DatagramSocket udpSocket;
@@ -50,7 +49,7 @@ public class UdpClient {
     @RequiresPermission(Manifest.permission.ACCESS_WIFI_STATE)
     public UdpClient(
             Context context, Handler handler, Consumer<Pair<InetAddress, Integer>> handshakeListener,
-            Consumer<Collection<FileInfo>> updateListener, Consumer<Exception> errorListener) {
+            Consumer<FileInfo> updateListener, Consumer<Exception> errorListener) {
         this.context = context;
         this.handler = handler;
         this.handshakeListener = handshakeListener;
@@ -166,11 +165,7 @@ public class UdpClient {
                 socket.receive(response);
                 if (checkHeader(UPDATE_BROADCAST_HEADER, response)) {
                     try (DataInputStream in = payloadStream(UPDATE_BROADCAST_HEADER, response)) {
-                        int count = in.readInt();
-                        Collection<FileInfo> payload = new ArrayList<>(count);
-                        while (count-- > 0) {
-                            payload.add(FileInfo.read(in));
-                        }
+                        FileInfo payload = FileInfo.read(in);
                         updateListener.accept(payload);
                     }
                 }

@@ -10,6 +10,7 @@ import android.util.Log;
 
 import androidx.core.util.Consumer;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -58,23 +59,20 @@ public class UdpServer {
         }
     }
 
-    public void broadcastUpdate(List<FileInfo> updatedFiles) {
+    public void broadcastUpdate(File updated) {
         broadcastPool.execute(() -> {
             try {
-                doBroadcastUpdate(updatedFiles);
+                doBroadcastUpdate(updated);
             } catch (Exception e) {
                 onSocketError(e);
             }
         });
     }
 
-    private void doBroadcastUpdate(List<FileInfo> updatedFiles) throws IOException {
+    private void doBroadcastUpdate(File updated) throws IOException {
         byte[] msgBytes = writeMessage(dos -> {
             dos.write(UPDATE_BROADCAST_HEADER);
-            dos.writeInt(updatedFiles.size());
-            for (FileInfo item : updatedFiles) {
-                item.write(dos);
-            }
+            FileInfo.writeFile(dos, updated);
         });
         for (InetAddress address : broadcastAddresses) {
             DatagramPacket packet = new DatagramPacket(msgBytes, 0, msgBytes.length, address, udpPort);

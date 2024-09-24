@@ -1,27 +1,36 @@
 package uksw.android.smartdocs.server;
 
+import static uksw.android.smartdocs.shared.TcpSession.closeSilent;
+
 import android.util.Log;
 
 import androidx.core.util.Consumer;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import uksw.android.smartdocs.shared.TcpSession;
+
 public class TcpServer {
+    public interface SessionCallback {
+        void handleSession(DataOutputStream out, DataInputStream in);
+    }
+
     private final ServerSocket tcpServerSocket;
     private final ExecutorService tcpClientThreadPool;
     private final Thread tcpThread;
-    private final Consumer<Socket> clientHandler;
+    private final SessionCallback sessionHandler;
     private final Consumer<Exception> errorListener;
 
-    public TcpServer(Consumer<Socket> clientHandler, Consumer<Exception> errorListener) throws IOException {
-        this.clientHandler = clientHandler;
+    public TcpServer(SessionCallback sessionHandler, Consumer<Exception> errorListener) throws IOException {
+        this.sessionHandler = sessionHandler;
         this.errorListener = errorListener;
         tcpServerSocket = new ServerSocket(0);
         tcpClientThreadPool = Executors.newCachedThreadPool();
@@ -47,24 +56,24 @@ public class TcpServer {
     }
 
     private void tcpLoop() {
-        Set<Socket> activeClients = Collections.synchronizedSet(new HashSet<>());
+        Set<TcpSession> activeSessions = Collections.synchronizedSet(new HashSet<>());
         try {
             while (true) {
-                Socket socket = tcpServerSocket.accept();
-                activeClients.add(socket);
+                TcpSession session = new TcpSession(tcpServerSocket.accept());
+                activeSessions.add(session);
                 tcpClientThreadPool.execute(() -> {
-                    clientHandler.accept(socket);
-                    activeClients.remove(socket);
+                    try {
+                        sessionHandler.handleSession(session.out, session.in);
+                    } finally {
+                        activeSessions.remove(session);
+                    }
                 });
             }
         } catch (Exception e) {
             Log.e("SmartDocs", "TCP Server loop error", e);
             tcpClientThreadPool.shutdownNow();
-            for (Socket socket : activeClients) {
-                try {
-                    socket.close();
-                } catch (IOException ignored) {
-                }
+            for (TcpSession session : activeSessions) {
+                closeSilent(session);
             }
             if (!Thread.currentThread().isInterrupted() && errorListener != null) {
                 errorListener.accept(e);

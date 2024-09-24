@@ -4,8 +4,8 @@ import static uksw.android.smartdocs.shared.Tcp.MSG_CREATE_FILE;
 import static uksw.android.smartdocs.shared.Tcp.MSG_ERROR;
 import static uksw.android.smartdocs.shared.Tcp.MSG_GET_CONTENTS;
 import static uksw.android.smartdocs.shared.Tcp.MSG_OK;
+import static uksw.android.smartdocs.shared.Tcp.MSG_PUSH_FILE;
 import static uksw.android.smartdocs.shared.Tcp.MSG_REMOVE_FILE;
-import static uksw.android.smartdocs.shared.Tcp.MSG_SEND_FILE;
 import static uksw.android.smartdocs.shared.Tcp.MSG_SYNC_REQ;
 import static uksw.android.smartdocs.shared.Tcp.readString;
 import static uksw.android.smartdocs.shared.Tcp.writeString;
@@ -28,10 +28,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 
@@ -65,14 +64,14 @@ public class ClientService extends Service {
     private final BinderImpl binder = new BinderImpl(this);
     private final Collection<StatusListener> statusListeners = new LinkedHashSet<>();
     private UdpClient udpClient;
-    private TcpSessions tcpSessions;
+    private TcpClient tcpClient;
 
     @Override
     public void onCreate() {
         super.onCreate();
         udpClient = new UdpClient(this, uiHandler,
                 this::onHandshake, this::applyUpdate, this::onUdpError);
-        tcpSessions = new TcpSessions(
+        tcpClient = new TcpClient(
                 uiHandler,
                 () -> {
                     udpClient.ensureHandshake();
@@ -89,8 +88,8 @@ public class ClientService extends Service {
     public void onDestroy() {
         udpClient.stop();
         udpClient = null;
-        tcpSessions.close();
-        tcpSessions = null;
+        tcpClient.close();
+        tcpClient = null;
         statusListeners.clear();
         super.onDestroy();
     }
@@ -128,7 +127,7 @@ public class ClientService extends Service {
     }
 
     public void requestSync() {
-        tcpSessions.session(
+        tcpClient.session(
                 (out, in) -> {
                     out.writeByte(MSG_SYNC_REQ);
                     Set<String> dirtyEntries = metadata.getDirtyEntries();
@@ -143,14 +142,29 @@ public class ClientService extends Service {
                         for (String entry : dirtyEntries) {
                             metadata.unmarkDirty(entry);
                         }
-
                         int count = in.readInt();
-                        if (count > 0) {
-                            List<FileInfo> update = new ArrayList<>(count);
-                            while (count-- > 0) {
-                                update.add(FileInfo.read(in));
+                        Set<String> remoteFiles = new HashSet<>();
+                        while (count-- > 0) {
+                            FileInfo item = FileInfo.read(in);
+                            File file = new File(baseDir, item.name);
+                            if (file.exists() || file.createNewFile()) {
+                                if (file.setLastModified(item.lastModified)) {
+                                    notifyFileChange(file);
+                                }
                             }
-                            applyUpdate(update);
+                            remoteFiles.add(item.name);
+                        }
+
+                        String[] localFiles = baseDir.list();
+                        if (localFiles != null) {
+                            for (String name : localFiles) {
+                                File file = new File(baseDir, name);
+                                if (!remoteFiles.contains(name)) {
+                                    if (file.delete()) {
+                                        notifyFileChange(file);
+                                    }
+                                }
+                            }
                         }
 
                     } else if (type == MSG_ERROR) {
@@ -164,7 +178,7 @@ public class ClientService extends Service {
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     public void loadFile(File file, ParcelFileDescriptor descriptor) {
-        tcpSessions.session(
+        tcpClient.session(
                 (out, in) -> {
                     out.writeByte(MSG_GET_CONTENTS);
                     writeString(out, file.getName());
@@ -172,11 +186,12 @@ public class ClientService extends Service {
                     int type = in.readByte();
                     if (type == MSG_OK) {
                         long timestamp = in.readLong();
+                        long length = in.readLong();
                         try (
                                 AutoCloseOutputStream p = new AutoCloseOutputStream(descriptor);
                                 FileOutputStream f = new FileOutputStream(file)) {
-                            int b;
-                            while ((b = in.read()) != -1) {
+                            while (length-- > 0) {
+                                int b = in.read();
                                 f.write(b);
                                 p.write(b);
                             }
@@ -200,11 +215,10 @@ public class ClientService extends Service {
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     public void createFile(File file) {
-        tcpSessions.session(
+        tcpClient.session(
                 (out, in) -> {
                     out.writeByte(MSG_CREATE_FILE);
-                    out.writeLong(file.lastModified());
-                    writeString(out, file.getName());
+                    FileInfo.writeFile(out, file);
 
                     int type = in.readByte();
                     if (type == MSG_OK) {
@@ -221,12 +235,11 @@ public class ClientService extends Service {
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
-    public void sendFile(File file) {
-        tcpSessions.session(
+    public void updateFile(File file) {
+        tcpClient.session(
                 (out, in) -> {
-                    out.writeByte(MSG_SEND_FILE);
-                    out.writeLong(file.lastModified());
-                    writeString(out, file.getName());
+                    out.writeByte(MSG_PUSH_FILE);
+                    FileInfo.writeFileWithContents(out, file);
 
                     int type = in.readByte();
                     if (type == MSG_OK) {
@@ -244,10 +257,10 @@ public class ClientService extends Service {
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     public void removeFile(File file) {
-        tcpSessions.session(
+        tcpClient.session(
                 (out, in) -> {
                     out.writeByte(MSG_REMOVE_FILE);
-                    writeString(out, file.getName());
+                    FileInfo.writeFile(out, file);
 
                     int type = in.readByte();
                     if (type == MSG_OK) {
@@ -273,29 +286,33 @@ public class ClientService extends Service {
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
-    private void applyUpdate(Collection<FileInfo> update) {
-        for (FileInfo item : update) {
-            File file = new File(baseDir, item.name);
-            if (item.lastModified == -1) {
-                if (!file.exists() || file.delete()) {
-                    metadata.removeEntry(file.getName());
+    private void applyUpdate(FileInfo update) {
+        File file = new File(baseDir, update.name);
+        if (update.length == -1) {
+            if (!file.exists() || file.delete()) {
+                metadata.removeEntry(file.getName());
+                notifyFileChange(file);
+            }
+        } else {
+            if (file.exists()) {
+                if (update.lastModified > file.lastModified()) {
+                    file.setLastModified(update.lastModified);
+                    notifyFileChange(file);
                 }
             } else {
-                if (file.exists()) {
-                    if (item.lastModified > file.lastModified()) {
-                        file.setLastModified(item.lastModified);
-                    }
-                } else {
-                    try {
-                        file.createNewFile();
-                        file.setLastModified(item.lastModified);
-                    } catch (IOException ignored) {
-                    }
+                try {
+                    file.createNewFile();
+                    file.setLastModified(update.lastModified);
+                    notifyFileChange(file);
+                } catch (IOException ignored) {
                 }
             }
-            Uri uri = DocumentsContract.buildDocumentUri(ClientProvider.AUTHORITY, item.name);
-            getContentResolver().notifyChange(uri, null);
         }
+    }
+
+    private void notifyFileChange(File file) {
+        Uri uri = DocumentsContract.buildDocumentUri(ClientProvider.AUTHORITY, ClientProvider.ROOT + ':' + file.getName());
+        getContentResolver().notifyChange(uri, null);
     }
 
     private void onUdpError(Exception error) {

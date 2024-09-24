@@ -1,8 +1,20 @@
 package uksw.android.smartdocs.server;
 
 import static java.lang.String.format;
+import static uksw.android.smartdocs.shared.FileInfo.readContents;
+import static uksw.android.smartdocs.shared.FileInfo.writeContents;
 import static uksw.android.smartdocs.shared.Inet.getBroadcastAddresses;
 import static uksw.android.smartdocs.shared.Inet.getLocalAddress;
+import static uksw.android.smartdocs.shared.Tcp.MSG_CONFLICT;
+import static uksw.android.smartdocs.shared.Tcp.MSG_CREATE_FILE;
+import static uksw.android.smartdocs.shared.Tcp.MSG_ERROR;
+import static uksw.android.smartdocs.shared.Tcp.MSG_GET_CONTENTS;
+import static uksw.android.smartdocs.shared.Tcp.MSG_OK;
+import static uksw.android.smartdocs.shared.Tcp.MSG_PUSH_FILE;
+import static uksw.android.smartdocs.shared.Tcp.MSG_REMOVE_FILE;
+import static uksw.android.smartdocs.shared.Tcp.MSG_SYNC_REQ;
+import static uksw.android.smartdocs.shared.Tcp.readString;
+import static uksw.android.smartdocs.shared.Tcp.writeString;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -15,10 +27,12 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.provider.DocumentsContract;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -26,11 +40,14 @@ import androidx.annotation.Nullable;
 import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.Socket;
-import java.net.UnknownHostException;
 import java.util.List;
+
+import uksw.android.smartdocs.shared.FileInfo;
 
 public class ServerService extends Service {
     public static final String ACTION_REQUEST_STATUS = "action.smart-docs.request.status";
@@ -54,6 +71,7 @@ public class ServerService extends Service {
         }
     };
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private final File baseDir = new File(getFilesDir(), ServerProvider.ROOT);
     private TcpServer tcpServer;
     private UdpServer udpServer;
     private int status = STATUS_STOPPED;
@@ -78,7 +96,7 @@ public class ServerService extends Service {
             int udpServerPort = intent.getIntExtra(EXTRA_UDP_PORT, 0);
             try {
                 List<InetAddress> broadcastAddresses = getBroadcastAddresses(getLocalAddress(this));
-                tcpServer = new TcpServer(this::clientHandler, this::onServerError);
+                tcpServer = new TcpServer(this::sessionCallback, this::onServerError);
                 tcpServer.start();
 
                 udpServer = new UdpServer(udpServerPort, tcpServer.getPort(), broadcastAddresses, this::onServerError);
@@ -112,8 +130,127 @@ public class ServerService extends Service {
         return null;
     }
 
-    private void clientHandler(Socket socket) {
+    private void sessionCallback(DataOutputStream out, DataInputStream in) {
+        try {
+            int type = in.readByte();
+            switch (type) {
+                case MSG_CREATE_FILE:
+                    createFile(out, in);
+                    break;
+                case MSG_PUSH_FILE:
+                    pushFile(out, in);
+                    break;
+                case MSG_REMOVE_FILE:
+                    removeFile(out, in);
+                    break;
+                case MSG_GET_CONTENTS:
+                    getContents(out, in);
+                    break;
+                case MSG_SYNC_REQ:
+                    syncRequest(out, in);
+                    break;
+            }
+        } catch (Exception e) {
+            uiHandler.post(() -> Toast.makeText(
+                    this, getString(R.string.status_toast, e.getMessage()), Toast.LENGTH_SHORT).show());
+            try {
+                out.writeByte(MSG_ERROR);
+                writeString(out, e.getMessage());
+            } catch (Exception ignored) {
+            }
+        }
+    }
 
+    @SuppressWarnings("ResultOfMethodCallIgnored")
+    private void createFile(DataOutputStream out, DataInputStream in) throws Exception {
+        FileInfo fileInfo = FileInfo.read(in);
+        File file = new File(baseDir, fileInfo.name);
+        if (file.exists()) {
+            out.writeByte(MSG_OK);
+            out.writeLong(file.lastModified());
+        } else {
+            if (file.createNewFile()) {
+                file.setLastModified(fileInfo.lastModified);
+                out.writeByte(MSG_OK);
+                out.writeLong(fileInfo.lastModified);
+                notifyFileChange(file);
+            } else {
+                throw new IllegalStateException("Cannot create file");
+            }
+        }
+    }
+
+    @SuppressWarnings("ResultOfMethodCallIgnored")
+    private void pushFile(DataOutputStream out, DataInputStream in) throws Exception {
+        FileInfo fileInfo = FileInfo.read(in);
+        File file = new File(baseDir, fileInfo.name);
+        if (!file.exists() || file.lastModified() < fileInfo.lastModified) {
+            readContents(in, file);
+            file.setLastModified(fileInfo.lastModified);
+            out.writeByte(MSG_OK);
+            out.writeLong(fileInfo.lastModified);
+            notifyFileChange(file);
+        } else {
+            // TODO: apply patch
+            out.writeByte(MSG_OK);
+            out.writeLong(file.lastModified());
+        }
+    }
+
+    private void removeFile(DataOutputStream out, DataInputStream in) throws Exception {
+        FileInfo fileInfo = FileInfo.read(in);
+        File file = new File(baseDir, fileInfo.name);
+        if (file.exists()) {
+            if (file.lastModified() < fileInfo.lastModified) {
+                if (file.delete()) {
+                    out.writeByte(MSG_OK);
+                    notifyFileChange(file);
+                } else {
+                    throw new IllegalStateException("Cannot remove file");
+                }
+            } else {
+                out.writeByte(MSG_CONFLICT);
+                out.writeLong(file.lastModified());
+            }
+        } else {
+            out.writeByte(MSG_OK);
+        }
+    }
+
+    private void getContents(DataOutputStream out, DataInputStream in) throws Exception {
+        String name = readString(in);
+        File file = new File(baseDir, name);
+        if (!file.exists()) {
+            throw new IllegalStateException("File does not exist");
+        }
+        out.writeByte(MSG_OK);
+        out.writeLong(file.lastModified());
+        writeContents(out, file);
+    }
+
+    private void syncRequest(DataOutputStream out, DataInputStream in) throws Exception {
+        int count = in.readInt();
+        while (count-- > 0) {
+            FileInfo fileInfo = FileInfo.read(in);
+            File file = new File(baseDir, fileInfo.name);
+            if (file.lastModified() < fileInfo.lastModified) {
+                if (!FileInfo.readContents(in, file) || file.delete()) {
+                    notifyFileChange(file);
+                }
+            } else {
+                // TODO: apply patch - ignore for now.
+            }
+        }
+        out.writeByte(MSG_OK);
+        String[] list = baseDir.list();
+        if (list == null || list.length == 0) {
+            out.writeInt(0);
+        } else {
+            out.writeInt(list.length);
+            for (String name : list) {
+                FileInfo.writeFile(out, new File(baseDir, name));
+            }
+        }
     }
 
     private void updateStatus(int status, String statusInfo) {
@@ -136,6 +273,12 @@ public class ServerService extends Service {
     private void onServerError(Exception error) {
         updateStatus(STATUS_ERROR, "Error " + error.getMessage());
         stopSelf();
+    }
+
+    private void notifyFileChange(File file) {
+        Uri uri = DocumentsContract.buildDocumentUri(ServerProvider.AUTHORITY, ServerProvider.ROOT + ':' + file.getName());
+        getContentResolver().notifyChange(uri, null);
+        udpServer.broadcastUpdate(file);
     }
 
     private Notification createNotification() {
@@ -167,9 +310,5 @@ public class ServerService extends Service {
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setPriority(Notification.PRIORITY_HIGH) // for under android 26 compatibility
                 .build();
-    }
-
-    private String getHost() throws UnknownHostException {
-        return getLocalAddress(this).getHostAddress();
     }
 }

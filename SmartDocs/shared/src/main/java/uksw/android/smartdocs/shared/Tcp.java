@@ -11,7 +11,7 @@ public interface Tcp {
     byte MSG_ERROR = 2;
     byte MSG_CONFLICT = 3;
     byte MSG_CREATE_FILE = 11;
-    byte MSG_SEND_FILE = 12;
+    byte MSG_PUSH_FILE = 12;
     byte MSG_REMOVE_FILE = 13;
     byte MSG_GET_CONTENTS = 14;
     byte MSG_SYNC_REQ = 15;

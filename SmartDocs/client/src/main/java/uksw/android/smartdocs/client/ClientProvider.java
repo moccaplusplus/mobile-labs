@@ -85,7 +85,7 @@ public class ClientProvider extends BaseProvider implements ServiceConnection {
                     metadata.markDirty(displayName);
                     metadata.setLoadedVersion(displayName, file.lastModified());
                     if (isConnected()) {
-                        clientService.sendFile(file);
+                        clientService.updateFile(file);
                     }
                 }
             });
@@ -103,7 +103,6 @@ public class ClientProvider extends BaseProvider implements ServiceConnection {
         try {
             if (file.createNewFile()) {
                 if (file.setWritable(true) && file.setReadable(true)) {
-                    metadata.createEntry(file.getName());
                     metadata.setLoadedVersion(file.getName(), file.lastModified());
                     metadata.markDirty(file.getName());
                     if (isConnected()) {
