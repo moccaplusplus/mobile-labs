@@ -1,52 +1,59 @@
 package uksw.android.smartdocs.client;
 
-import static uksw.android.smartdocs.shared.Net.getBroadcastAddresses;
-import static uksw.android.smartdocs.shared.Net.getLocalAddress;
-import static uksw.android.smartdocs.shared.Udp.MSG_HANDSHAKE_CLIENT;
-import static uksw.android.smartdocs.shared.Udp.MSG_HANDSHAKE_SERVER;
-import static uksw.android.smartdocs.shared.Udp.MSG_UPDATE_BROADCAST_HEADER;
-import static uksw.android.smartdocs.shared.Udp.getBytes;
-import static uksw.android.smartdocs.shared.Udp.getMessage;
+import static uksw.android.smartdocs.shared.Inet.getBroadcastAddresses;
+import static uksw.android.smartdocs.shared.Inet.getLocalAddress;
+import static uksw.android.smartdocs.shared.Udp.HANDSHAKE_CLIENT_HEADER;
+import static uksw.android.smartdocs.shared.Udp.HANDSHAKE_SERVER_HEADER;
+import static uksw.android.smartdocs.shared.Udp.UPDATE_BROADCAST_HEADER;
+import static uksw.android.smartdocs.shared.Udp.checkHeader;
+import static uksw.android.smartdocs.shared.Udp.payloadStream;
 
 import android.Manifest;
 import android.content.Context;
 import android.os.Handler;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.annotation.RequiresPermission;
 import androidx.core.util.Consumer;
 
+import java.io.DataInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 
+import uksw.android.smartdocs.shared.FileInfo;
 import uksw.android.smartdocs.shared.Settings;
 
 public class UdpClient {
     private static final int DISCOVERY_TIMEOUT_MILLIS = 7500;
-    private final byte[] responseBuffer = new byte[2054];
+
+    private final byte[] responseBuffer = new byte[32_768];
     private final Context context;
     private final Handler handler;
-    private final Consumer<HostAndPort> discoveryListener;
-    private final Consumer<Void> updateListener;
+    private final Consumer<Pair<InetAddress, Integer>> handshakeListener;
+    private final Consumer<Collection<FileInfo>> updateListener;
     private final Consumer<Exception> errorListener;
     private Thread udpThread;
     private DatagramSocket udpSocket;
     private CountDownLatch countDownLatch;
-    private HostAndPort hostAndPort;
     private Exception handshakeError;
+    private InetAddress host;
+    private int tcpPort = -1;
 
     @RequiresPermission(Manifest.permission.ACCESS_WIFI_STATE)
     public UdpClient(
-            Context context, Handler handler, Consumer<HostAndPort> discoveryListener,
-            Consumer<Void> updateListener, Consumer<Exception> errorListener) {
+            Context context, Handler handler, Consumer<Pair<InetAddress, Integer>> handshakeListener,
+            Consumer<Collection<FileInfo>> updateListener, Consumer<Exception> errorListener) {
         this.context = context;
         this.handler = handler;
-        this.discoveryListener = discoveryListener;
+        this.handshakeListener = handshakeListener;
         this.updateListener = updateListener;
         this.errorListener = errorListener;
     }
@@ -60,10 +67,10 @@ public class UdpClient {
     }
 
     public boolean isConnected() {
-        return hostAndPort != null && udpSocket != null && !udpSocket.isClosed();
+        return host != null && udpSocket != null && !udpSocket.isClosed();
     }
 
-    public HostAndPort ensureHandshake() throws Exception {
+    public void ensureHandshake() throws Exception {
         if (countDownLatch == null || handshakeError != null) {
             start();
         }
@@ -71,7 +78,14 @@ public class UdpClient {
         if (handshakeError != null) {
             throw handshakeError;
         }
-        return hostAndPort;
+    }
+
+    public InetAddress getHost() {
+        return host;
+    }
+
+    public int getTcpPort() {
+        return tcpPort;
     }
 
     public void start() {
@@ -95,7 +109,8 @@ public class UdpClient {
     }
 
     public void stop() {
-        hostAndPort = null;
+        host = null;
+        tcpPort = -1;
         handshakeError = null;
         countDownLatch = null;
         if (udpThread != null) {
@@ -113,23 +128,21 @@ public class UdpClient {
             socket.setSoTimeout(DISCOVERY_TIMEOUT_MILLIS);
 
             List<InetAddress> broadcastAddresses = getBroadcastAddresses(getLocalAddress(context));
-            byte[] handshakeBytes = getBytes(MSG_HANDSHAKE_CLIENT);
             for (InetAddress broadcastAddress : broadcastAddresses) {
                 DatagramPacket packet = new DatagramPacket(
-                        handshakeBytes, 0, handshakeBytes.length, broadcastAddress, udpPort);
+                        HANDSHAKE_CLIENT_HEADER, HANDSHAKE_CLIENT_HEADER.length, broadcastAddress, udpPort);
                 socket.send(packet);
             }
-            byte[] responseBuffer = new byte[128];
             while (true) {
                 DatagramPacket response = new DatagramPacket(responseBuffer, responseBuffer.length);
                 socket.receive(response);
-                String message = getMessage(response);
-                if (message.startsWith(MSG_HANDSHAKE_SERVER)) {
-                    String payload = message.substring(MSG_HANDSHAKE_SERVER.length()).trim();
-                    int tcpPort = Integer.parseInt(payload);
-                    hostAndPort = new HostAndPort(response.getAddress(), tcpPort);
+                if (checkHeader(HANDSHAKE_SERVER_HEADER, response)) {
+                    host = response.getAddress();
+                    try (DataInputStream payload = payloadStream(HANDSHAKE_SERVER_HEADER, response)) {
+                        tcpPort = payload.readInt();
+                    }
                     latch.countDown();
-                    handler.post(() -> discoveryListener.accept(hostAndPort));
+                    handler.post(() -> handshakeListener.accept(new Pair<>(host, tcpPort)));
                     return true;
                 }
             }
@@ -151,9 +164,15 @@ public class UdpClient {
             while (true) {
                 DatagramPacket response = new DatagramPacket(responseBuffer, responseBuffer.length);
                 socket.receive(response);
-                String message = getMessage(response);
-                if (message.startsWith(MSG_UPDATE_BROADCAST_HEADER)) {
-                    updateListener.accept(null); // TODO: add update info
+                if (checkHeader(UPDATE_BROADCAST_HEADER, response)) {
+                    try (DataInputStream in = payloadStream(UPDATE_BROADCAST_HEADER, response)) {
+                        int count = in.readInt();
+                        Collection<FileInfo> payload = new ArrayList<>(count);
+                        while (count-- > 0) {
+                            payload.add(FileInfo.read(in));
+                        }
+                        updateListener.accept(payload);
+                    }
                 }
             }
         } catch (Exception e) {

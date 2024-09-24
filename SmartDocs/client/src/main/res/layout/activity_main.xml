@@ -52,12 +52,6 @@
         android:text="@string/edit_file" />
 
     <Button
-        android:id="@+id/button_col_lab"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/start_col_lab" />
-
-    <Button
         android:id="@+id/button_remove"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

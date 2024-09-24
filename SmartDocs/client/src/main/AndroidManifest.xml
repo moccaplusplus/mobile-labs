@@ -14,8 +14,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SmartDocs">
         <provider
-            android:name=".SmartDocsProvider"
-            android:authorities="uksw.android.smartdocs"
+            android:name=".ClientProvider"
+            android:authorities="uksw.android.smartdocs.client"
             android:permission="android.permission.MANAGE_DOCUMENTS"
             android:grantUriPermissions="true"
             android:enabled="true"

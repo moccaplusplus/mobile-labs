@@ -1,10 +1,10 @@
 package uksw.android.smartdocs.server;
 
-import static uksw.android.smartdocs.shared.Udp.MSG_HANDSHAKE_CLIENT;
-import static uksw.android.smartdocs.shared.Udp.MSG_HANDSHAKE_SERVER;
-import static uksw.android.smartdocs.shared.Udp.MSG_UPDATE_BROADCAST_HEADER;
-import static uksw.android.smartdocs.shared.Udp.getBytes;
-import static uksw.android.smartdocs.shared.Udp.getMessage;
+import static uksw.android.smartdocs.shared.Udp.HANDSHAKE_CLIENT_HEADER;
+import static uksw.android.smartdocs.shared.Udp.HANDSHAKE_SERVER_HEADER;
+import static uksw.android.smartdocs.shared.Udp.UPDATE_BROADCAST_HEADER;
+import static uksw.android.smartdocs.shared.Udp.checkHeader;
+import static uksw.android.smartdocs.shared.Udp.writeMessage;
 
 import android.util.Log;
 
@@ -14,25 +14,29 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.SocketException;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import uksw.android.smartdocs.shared.FileInfo;
+
 public class UdpServer {
-    private final byte[] requestBuffer = new byte[256];
+    private final byte[] requestBuffer = new byte[2048];
+    private final byte[] handshakeBytes;
     private final DatagramSocket udpSocket;
     private final Thread udpThread;
     private final Consumer<Exception> errorListener;
     private final ExecutorService broadcastPool = Executors.newSingleThreadExecutor();
-    private final byte[] handshakeBytes;
     private final List<InetAddress> broadcastAddresses;
     private final int udpPort;
 
-    public UdpServer(int udpPort, int tcpPort, List<InetAddress> broadcastAddresses, Consumer<Exception> errorListener) throws SocketException {
+    public UdpServer(int udpPort, int tcpPort, List<InetAddress> broadcastAddresses, Consumer<Exception> errorListener) throws IOException {
         udpSocket = new DatagramSocket(udpPort);
         udpSocket.setBroadcast(true);
-        handshakeBytes = getBytes(MSG_HANDSHAKE_SERVER + tcpPort + "\n");
+        handshakeBytes = writeMessage(out -> {
+            out.write(HANDSHAKE_SERVER_HEADER);
+            out.writeInt(tcpPort);
+        });
         this.udpPort = udpPort + 1; // add one for emulator only
         this.broadcastAddresses = broadcastAddresses;
         this.errorListener = errorListener;
@@ -54,7 +58,7 @@ public class UdpServer {
         }
     }
 
-    public void broadcastUpdate(List<String> updatedFiles) {
+    public void broadcastUpdate(List<FileInfo> updatedFiles) {
         broadcastPool.execute(() -> {
             try {
                 doBroadcastUpdate(updatedFiles);
@@ -64,12 +68,16 @@ public class UdpServer {
         });
     }
 
-    private void doBroadcastUpdate(List<String> updatedFiles) throws IOException {
-        String message = MSG_UPDATE_BROADCAST_HEADER;
-        message += String.join("\n", updatedFiles) + "\n";
-        byte[] bytes = getBytes(message);
+    private void doBroadcastUpdate(List<FileInfo> updatedFiles) throws IOException {
+        byte[] msgBytes = writeMessage(dos -> {
+            dos.write(UPDATE_BROADCAST_HEADER);
+            dos.writeInt(updatedFiles.size());
+            for (FileInfo item : updatedFiles) {
+                item.write(dos);
+            }
+        });
         for (InetAddress address : broadcastAddresses) {
-            DatagramPacket packet = new DatagramPacket(bytes, 0, bytes.length, address, udpPort);
+            DatagramPacket packet = new DatagramPacket(msgBytes, 0, msgBytes.length, address, udpPort);
             udpSocket.send(packet);
         }
     }
@@ -88,7 +96,7 @@ public class UdpServer {
         DatagramPacket request = new DatagramPacket(
                 requestBuffer, 0, requestBuffer.length);
         udpSocket.receive(request);
-        if (MSG_HANDSHAKE_CLIENT.equals(getMessage(request))) {
+        if (checkHeader(HANDSHAKE_CLIENT_HEADER, request)) {
             DatagramPacket response = new DatagramPacket(
                     handshakeBytes, 0, handshakeBytes.length, request.getAddress(),
                     request.getPort());

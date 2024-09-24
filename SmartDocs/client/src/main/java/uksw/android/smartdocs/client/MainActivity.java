@@ -9,7 +9,6 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.provider.DocumentsContract;
@@ -21,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.FileNotFoundException;
 
+import uksw.android.smartdocs.shared.Pickers;
 import uksw.android.smartdocs.shared.SettingsView;
 
 public class MainActivity extends AppCompatActivity implements ServiceConnection, ClientService.StatusListener {
@@ -35,7 +35,6 @@ public class MainActivity extends AppCompatActivity implements ServiceConnection
     private Button syncButton;
     private Button createButton;
     private Button editButton;
-    private Button colLabButton;
     private Button removeButton;
     private ClientService clientService;
     private int connectionStatus = STATUS_DISCONNECTED;
@@ -70,17 +69,15 @@ public class MainActivity extends AppCompatActivity implements ServiceConnection
         syncButton = findViewById(R.id.button_sync);
         createButton = findViewById(R.id.button_create);
         editButton = findViewById(R.id.button_edit);
-        colLabButton = findViewById(R.id.button_col_lab);
         removeButton = findViewById(R.id.button_remove);
         connectButton.setOnClickListener(v -> connect());
         disconnectButton.setOnClickListener(v -> disconnect());
         syncButton.setOnClickListener(v -> requestSync());
         createButton.setOnClickListener(v -> createFile());
-        colLabButton.setOnClickListener(v -> initColLab());
         editButton.setOnClickListener(v -> editFile());
         removeButton.setOnClickListener(v -> removeFile());
         updateUiState();
-        bindService(new Intent(this, ClientService.class), this, BIND_AUTO_CREATE);
+        bindService(new Intent(getApplicationContext(), ClientService.class), this, BIND_AUTO_CREATE);
     }
 
     @Override
@@ -116,7 +113,6 @@ public class MainActivity extends AppCompatActivity implements ServiceConnection
             syncButton.setEnabled(false);
             createButton.setEnabled(false);
             editButton.setEnabled(false);
-            colLabButton.setEnabled(false);
             removeButton.setEnabled(false);
         } else {
             switch (connectionStatus) {
@@ -136,7 +132,6 @@ public class MainActivity extends AppCompatActivity implements ServiceConnection
             syncButton.setEnabled(connectionStatus == STATUS_CONNECTED);
             createButton.setEnabled(true);
             editButton.setEnabled(true);
-            colLabButton.setEnabled(connectionStatus == STATUS_CONNECTED);
             removeButton.setEnabled(true);
         }
     }
@@ -153,10 +148,6 @@ public class MainActivity extends AppCompatActivity implements ServiceConnection
         clientService.requestSync();
     }
 
-    private void initColLab() {
-        // TODO
-    }
-
     private void editFile(Uri uri) {
         Intent intent = new Intent(this, EditorActivity.class);
         intent.setData(uri);
@@ -166,33 +157,21 @@ public class MainActivity extends AppCompatActivity implements ServiceConnection
     private void removeFile(Uri uri) {
         try {
             DocumentsContract.deleteDocument(getContentResolver(), uri);
+            alert(this, R.string.file_removed);
         } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
+            alert(this, R.string.error, R.string.failed_remove_file);
         }
     }
 
     private void createFile() {
-        openPicker(Intent.ACTION_CREATE_DOCUMENT, REQUEST_CODE_CREATE);
+        Pickers.create(this, SmartDocsProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_CREATE);
     }
 
     private void editFile() {
-        openPicker(Intent.ACTION_OPEN_DOCUMENT, REQUEST_CODE_EDIT);
+        Pickers.open(this, SmartDocsProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_EDIT);
     }
 
     private void removeFile() {
-        openPicker(Intent.ACTION_OPEN_DOCUMENT, REQUEST_CODE_REMOVE);
-    }
-
-    private void openPicker(String action, int requestCode) {
-        Intent intent = new Intent(action);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType(SmartDocsProvider.DOCUMENT_MIME_TYPE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, SmartDocsProvider.ROOT_DOCUMENT_URI);
-            startActivityForResult(intent, requestCode);
-        } else {
-            alert(this, R.string.legacy_dialog, R.string.legacy_dialog_msg,
-                    () -> startActivityForResult(intent, requestCode));
-        }
+        Pickers.open(this, SmartDocsProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_REMOVE);
     }
 }

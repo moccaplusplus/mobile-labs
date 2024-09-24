@@ -10,23 +10,23 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import uksw.android.smartdocs.shared.Dialogs;
-import uksw.android.smartdocs.shared.Settings;
+import uksw.android.smartdocs.shared.Pickers;
 import uksw.android.smartdocs.shared.SettingsView;
 
 public class MainActivity extends AppCompatActivity {
+    private static final int REQUEST_CODE_PICK = 123;
+
     private final BroadcastReceiver serverStateReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -77,6 +77,14 @@ public class MainActivity extends AppCompatActivity {
         super.onStop();
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode == RESULT_OK && requestCode == REQUEST_CODE_PICK && data != null) {
+            viewFile(data.getData());
+        }
+    }
+
     private void onStatusUpdate(int status, String statusMsg) {
         statusTextView.setText(getString(R.string.status_label, statusMsg));
         settingsView.setEnabled(status != STATUS_STARTED);
@@ -100,6 +108,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void listFiles() {
-        // TODO
+        Pickers.open(this, ServerProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_PICK);
+    }
+
+    private void viewFile(Uri uri) {
+        Intent intent = new Intent(this, ViewerActivity.class);
+        intent.setData(uri);
+        startActivity(intent);
     }
 }

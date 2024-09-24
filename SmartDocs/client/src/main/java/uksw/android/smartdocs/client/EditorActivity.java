@@ -2,73 +2,49 @@ package uksw.android.smartdocs.client;
 
 import static uksw.android.smartdocs.shared.Dialogs.alert;
 
-import android.net.Uri;
 import android.os.Bundle;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.TextView;
 
-import androidx.appcompat.app.AppCompatActivity;
-
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 
-import uksw.android.smartdocs.shared.Dialogs;
+import uksw.android.smartdocs.shared.AbstractFileActivity;
 
-public class EditorActivity extends AppCompatActivity {
-    private EditText editor;
-    private Button saveButton;
-    private Uri uri;
-    private TextView titleView;
-
+public class EditorActivity extends AbstractFileActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_editor);
         titleView = findViewById(R.id.title_text);
-        editor = findViewById(R.id.edit_text);
-        saveButton = findViewById(R.id.button_save);
-        saveButton.setOnClickListener(v -> save());
+        contentsView = findViewById(R.id.edit_text);
         findViewById(R.id.button_close).setOnClickListener(v -> finish());
+        findViewById(R.id.button_save).setOnClickListener(v -> save());
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
-        uri = getIntent().getData();
-        if (uri == null) {
-            alert(this, R.string.error, R.string.missing_uri, this::finish);
-            return;
-        }
+    protected void readFile() {
+        contentsView.setEnabled(false);
+        super.readFile();
+    }
 
-        titleView.setText(getString(R.string.file_name, uri.getLastPathSegment()));
-        saveButton.setEnabled(true);
-        readFile();
+    @Override
+    protected void readFileInBackground() {
+        super.readFileInBackground();
+        runOnUiThread(() -> contentsView.setEnabled(true));
     }
 
     private void save() {
-        String content = editor.getText().toString();
-        try (BufferedWriter writer = new BufferedWriter(
-                new OutputStreamWriter(getContentResolver().openOutputStream(uri)))) {
-            writer.write(content);
-            alert(this, R.string.file_saved);
-        } catch (IOException e) {
-            alert(this, R.string.error, R.string.failed_write_file);
-        }
+        String content = contentsView.getText().toString();
+        new Thread(() -> save(content)).start();
     }
 
-    private void readFile() {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(getContentResolver().openInputStream(uri)))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                editor.append(line);
-            }
-        } catch (IOException e) {
-            alert(this, R.string.error, R.string.failed_read_file);
+    private void save(String content) {
+        try (BufferedWriter writer = new BufferedWriter(
+                new OutputStreamWriter(getContentResolver().openOutputStream(uri, "w")))) {
+            writer.write(content);
+            runOnUiThread(() -> alert(this, R.string.file_saved, 0, this::finish));
+            getContentResolver().notifyChange(uri, observer);
+        } catch (Exception e) {
+            runOnUiThread(() -> alert(this, getString(R.string.error), getString(R.string.failed_write_file, e.getMessage())));
         }
     }
 }

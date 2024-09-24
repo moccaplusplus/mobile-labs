@@ -58,9 +58,6 @@ public class SmartDocsProvider extends DocumentsProvider {
     private File baseDir;
     private Handler handler;
 
-    public SmartDocsProvider() {
-    }
-
     @SuppressWarnings("DataFlowIssue")
     @Override
     public boolean onCreate() {

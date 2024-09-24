@@ -1,8 +1,8 @@
 package uksw.android.smartdocs.server;
 
 import static java.lang.String.format;
-import static uksw.android.smartdocs.shared.Net.getBroadcastAddresses;
-import static uksw.android.smartdocs.shared.Net.getLocalAddress;
+import static uksw.android.smartdocs.shared.Inet.getBroadcastAddresses;
+import static uksw.android.smartdocs.shared.Inet.getLocalAddress;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -113,7 +113,7 @@ public class ServerService extends Service {
     }
 
     private void clientHandler(Socket socket) {
-        // TODO
+
     }
 
     private void updateStatus(int status, String statusInfo) {

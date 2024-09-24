@@ -25,15 +25,26 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SmartDocs">
+        <provider
+            android:name=".ServerProvider"
+            android:authorities="uksw.android.smartdocs.server"
+            android:permission="android.permission.MANAGE_DOCUMENTS"
+            android:grantUriPermissions="true"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
         <activity
-            android:name=".SettingsActivity"
+            android:name=".ViewerActivity"
             android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

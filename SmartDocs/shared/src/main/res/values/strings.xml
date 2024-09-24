@@ -2,7 +2,15 @@
 <resources>
     <string name="no">No</string>
     <string name="yes">Yes</string>
-    <string name="close">Close</string>
+    <string name="ok">OK</string>
     <string name="udp_port">UDP Server Port</string>
     <string name="tcp_port">TCP Server Port</string>
+    <string name="legacy_dialog">Android OS Older Version</string>
+    <string name="legacy_dialog_msg">In this version of Android OS EXTRA_INITIAL_URI flag is not supported.\nPlease navigate to SmartDocs root manually.</string>
+    <string name="missing_uri">File URI is missing</string>
+    <string name="file_name">File: %1$s</string>
+    <string name="error">Error</string>
+    <string name="failed_read_file">Failed to read file: %1$s</string>
+    <string name="file_modified">File modified</string>
+    <string name="file_modified_outside">The file has been modified by another activity. Do You want to reload its contents?</string>
 </resources>
