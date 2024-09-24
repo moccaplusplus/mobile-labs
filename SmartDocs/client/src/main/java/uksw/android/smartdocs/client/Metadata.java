@@ -5,52 +5,48 @@ import static android.content.Context.MODE_PRIVATE;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 public class Metadata {
-    public static SharedPreferences getPrefs(Context context) {
-        return context.getSharedPreferences(context.getPackageName() + "_metadata", MODE_PRIVATE);
+    public static SharedPreferences getPrefs(Context context, String suffix) {
+        return context.getSharedPreferences(context.getPackageName() + suffix, MODE_PRIVATE);
     }
 
     public static Metadata get(Context context) {
-        return new Metadata(getPrefs(context));
+        return new Metadata(getPrefs(context, "_meta_loaded"), getPrefs(context, "_meta_dirty"));
     }
 
-    private final SharedPreferences prefs;
+    private final SharedPreferences loaded;
+    private final SharedPreferences dirty;
 
-    public Metadata(SharedPreferences prefs) {
-        this.prefs = prefs;
-    }
-
-    public void createEntry(String displayName) {
-
-    }
-
-    public void markDirty(String displayName, boolean flag) {
-
-    }
-
-    public void markRemoved(String name, boolean b) {
-
-    }
-
-    public boolean isLoaded(String name) {
-        return false;
-    }
-
-    public void setLoadedVersion(String name, long timestamp) {
-
+    public Metadata(SharedPreferences loaded, SharedPreferences dirty) {
+        this.loaded = loaded;
+        this.dirty = dirty;
     }
 
     public void removeEntry(String name) {
-
+        unmarkDirty(name);
+        loaded.edit().remove(name).apply();
     }
 
-    public boolean isDirty(String displayName) {
-        return false;
+    public void markDirty(String name) {
+        dirty.edit().putBoolean(name, true).apply();
     }
 
-    public Collection<String> getDirty() {
-        return null;
+    public void unmarkDirty(String name) {
+        dirty.edit().remove(name).apply();
+    }
+
+    public long getLoadedVersion(String name) {
+        return loaded.getLong(name, -1L);
+    }
+
+    public void setLoadedVersion(String name, long timestamp) {
+        loaded.edit().putLong(name, timestamp).apply();
+    }
+
+    public Set<String> getDirtyEntries() {
+        return new HashSet<>(dirty.getAll().keySet());
     }
 }

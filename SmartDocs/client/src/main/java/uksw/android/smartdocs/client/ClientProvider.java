@@ -69,7 +69,7 @@ public class ClientProvider extends BaseProvider implements ServiceConnection {
             String displayName = file.getName();
             boolean isRead = mode.indexOf('w') == -1;
             if (isRead) {
-                if (metadata.isLoaded(displayName)) {
+                if (metadata.getLoadedVersion(displayName) == file.lastModified()) {
                     return ParcelFileDescriptor.open(file, MODE_READ_ONLY);
                 }
                 if (isConnected()) {
@@ -82,7 +82,7 @@ public class ClientProvider extends BaseProvider implements ServiceConnection {
             // write
             return ParcelFileDescriptor.open(file, MODE_WRITE_ONLY, handler, e -> {
                 if (e == null) {
-                    metadata.markDirty(displayName, true);
+                    metadata.markDirty(displayName);
                     metadata.setLoadedVersion(displayName, file.lastModified());
                     if (isConnected()) {
                         clientService.sendFile(file);
@@ -105,7 +105,7 @@ public class ClientProvider extends BaseProvider implements ServiceConnection {
                 if (file.setWritable(true) && file.setReadable(true)) {
                     metadata.createEntry(file.getName());
                     metadata.setLoadedVersion(file.getName(), file.lastModified());
-                    metadata.markDirty(file.getName(), true);
+                    metadata.markDirty(file.getName());
                     if (isConnected()) {
                         clientService.createFile(file);
                     }
@@ -126,7 +126,7 @@ public class ClientProvider extends BaseProvider implements ServiceConnection {
     public void deleteDocument(String documentId) throws FileNotFoundException {
         File file = getFileForDocId(documentId);
         if (file.exists() && file.delete()) {
-            metadata.markRemoved(file.getName(), true);
+            metadata.markDirty(file.getName());
             if (isConnected()) {
                 clientService.removeFile(file);
             }

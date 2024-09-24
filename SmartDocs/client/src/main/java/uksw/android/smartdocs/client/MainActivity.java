@@ -164,14 +164,14 @@ public class MainActivity extends AppCompatActivity implements ServiceConnection
     }
 
     private void createFile() {
-        Pickers.create(this, SmartDocsProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_CREATE);
+        Pickers.create(this, ClientProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_CREATE);
     }
 
     private void editFile() {
-        Pickers.open(this, SmartDocsProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_EDIT);
+        Pickers.open(this, ClientProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_EDIT);
     }
 
     private void removeFile() {
-        Pickers.open(this, SmartDocsProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_REMOVE);
+        Pickers.open(this, ClientProvider.ROOT_DOCUMENT_URI, REQUEST_CODE_REMOVE);
     }
 }

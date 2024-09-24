@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 
 import uksw.android.smartdocs.shared.FileInfo;
@@ -130,7 +131,7 @@ public class ClientService extends Service {
         tcpSessions.session(
                 (out, in) -> {
                     out.writeByte(MSG_SYNC_REQ);
-                    Collection<String> dirtyEntries = metadata.getDirty();
+                    Set<String> dirtyEntries = metadata.getDirtyEntries();
                     out.writeInt(dirtyEntries.size());
                     for (String name : dirtyEntries) {
                         File file = new File(baseDir, name);
@@ -140,7 +141,7 @@ public class ClientService extends Service {
                     int type = in.readByte();
                     if (type == MSG_OK) {
                         for (String entry : dirtyEntries) {
-                            metadata.markDirty(entry, false);
+                            metadata.unmarkDirty(entry);
                         }
 
                         int count = in.readInt();
@@ -208,7 +209,7 @@ public class ClientService extends Service {
                     int type = in.readByte();
                     if (type == MSG_OK) {
                         long timestamp = in.readLong();
-                        metadata.markDirty(file.getName(), false);
+                        metadata.unmarkDirty(file.getName());
                         file.setLastModified(timestamp);
                     } else if (type == MSG_ERROR) {
                         throw new IOException(readString(in));
@@ -230,7 +231,7 @@ public class ClientService extends Service {
                     int type = in.readByte();
                     if (type == MSG_OK) {
                         long timestamp = in.readLong();
-                        metadata.markDirty(file.getName(), false);
+                        metadata.unmarkDirty(file.getName());
                         file.setLastModified(timestamp);
                     } else if (type == MSG_ERROR) {
                         throw new IOException(readString(in));
@@ -254,7 +255,7 @@ public class ClientService extends Service {
                     } else if (type == Tcp.MSG_CONFLICT) {
                         long timestamp = in.readLong();
                         file.createNewFile();
-                        metadata.markRemoved(file.getName(), false);
+                        metadata.unmarkDirty(file.getName());
                         file.setLastModified(timestamp);
                     } else if (type == MSG_ERROR) {
                         throw new IOException(readString(in));
@@ -288,7 +289,6 @@ public class ClientService extends Service {
                     try {
                         file.createNewFile();
                         file.setLastModified(item.lastModified);
-                        metadata.createEntry(item.name);
                     } catch (IOException ignored) {
                     }
                 }
