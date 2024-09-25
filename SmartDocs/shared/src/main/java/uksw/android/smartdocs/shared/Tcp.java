@@ -19,7 +19,7 @@ public interface Tcp {
     @SuppressWarnings("ResultOfMethodCallIgnored")
     static String readString(DataInputStream in) throws IOException {
         int length = in.readInt();
-        if (length == 0) {
+        if (length <= 0) {
             return null;
         }
         byte[] buf = new byte[length];

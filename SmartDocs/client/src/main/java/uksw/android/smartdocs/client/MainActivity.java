@@ -6,6 +6,7 @@ import static uksw.android.smartdocs.client.ClientService.STATUS_DISCONNECTED;
 import static uksw.android.smartdocs.shared.Dialogs.alert;
 
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.net.Uri;
@@ -156,7 +157,9 @@ public class MainActivity extends AppCompatActivity implements ServiceConnection
 
     private void removeFile(Uri uri) {
         try {
-            DocumentsContract.deleteDocument(getContentResolver(), uri);
+            ContentResolver resolver = getContentResolver();
+            DocumentsContract.deleteDocument(resolver, uri);
+            resolver.notifyChange(uri, null);
             alert(this, R.string.file_removed);
         } catch (FileNotFoundException e) {
             alert(this, R.string.error, R.string.failed_remove_file);

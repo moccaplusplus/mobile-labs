@@ -124,13 +124,16 @@ public class ClientProvider extends BaseProvider implements ServiceConnection {
     @Override
     public void deleteDocument(String documentId) throws FileNotFoundException {
         File file = getFileForDocId(documentId);
-        if (file.exists() && file.delete()) {
-            metadata.markDirty(file.getName());
-            if (isConnected()) {
-                clientService.removeFile(file);
+        if (file.exists()) {
+            if (file.delete()) {
+                metadata.markDirty(file.getName());
+                if (isConnected()) {
+                    clientService.removeFile(file);
+                }
+            } else {
+                throw new FileNotFoundException();
             }
         }
-        throw new FileNotFoundException();
     }
 
     private boolean isConnected() {

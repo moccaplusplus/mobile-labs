@@ -7,4 +7,5 @@
     <string name="status_toast">SmartDocs Server: %1$s</string>
     <string name="invalid_port">Invalid port value.</string>
     <string name="invalid_port_msg">Cannot start server. Please provide valid port value.</string>
+    <string name="close">Close</string>
 </resources>

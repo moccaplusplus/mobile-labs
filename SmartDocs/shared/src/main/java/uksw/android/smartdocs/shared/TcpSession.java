@@ -21,7 +21,7 @@ public class TcpSession implements AutoCloseable {
 
     public TcpSession(Socket socket) throws IOException {
         this.socket = socket;
-        socket.setSoTimeout(TIMEOUT_MILLIS);
+//        socket.setSoTimeout(TIMEOUT_MILLIS);
         in = new DataInputStream(socket.getInputStream());
         out = new DataOutputStream(socket.getOutputStream());
     }

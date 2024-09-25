@@ -30,8 +30,10 @@ public class Metadata {
         loaded.edit().remove(name).apply();
     }
 
-    public void markDirty(String name) {
-        dirty.edit().putBoolean(name, true).apply();
+    public long markDirty(String name) {
+        long timestamp = System.currentTimeMillis();
+        dirty.edit().putLong(name, timestamp).apply();
+        return timestamp;
     }
 
     public void unmarkDirty(String name) {
@@ -39,7 +41,11 @@ public class Metadata {
     }
 
     public boolean isDirty(String name) {
-        return dirty.getBoolean(name, false);
+        return dirty.contains(name);
+    }
+
+    public long getDirtyTimestamp(String name) {
+        return dirty.getLong(name, -1L);
     }
 
     public long getLoadedVersion(String name) {

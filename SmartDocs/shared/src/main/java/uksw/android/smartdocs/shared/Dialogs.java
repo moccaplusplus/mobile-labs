@@ -15,6 +15,10 @@ public interface Dialogs {
         alert(context, context.getString(title), null);
     }
 
+    static void alert(Context context, @StringRes int title, Runnable onClose) {
+        alert(context, context.getString(title), null, onClose);
+    }
+
     static void alert(Context context, @StringRes int title, @StringRes int message) {
         alert(context, context.getString(title), context.getString(message));
     }

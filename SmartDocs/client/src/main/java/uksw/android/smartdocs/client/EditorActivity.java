@@ -41,7 +41,7 @@ public class EditorActivity extends AbstractFileActivity {
         try (BufferedWriter writer = new BufferedWriter(
                 new OutputStreamWriter(getContentResolver().openOutputStream(uri, "w")))) {
             writer.write(content);
-            runOnUiThread(() -> alert(this, R.string.file_saved, 0, this::finish));
+            runOnUiThread(() -> alert(this, R.string.file_saved, this::finish));
             getContentResolver().notifyChange(uri, observer);
         } catch (Exception e) {
             runOnUiThread(() -> alert(this, getString(R.string.error), getString(R.string.failed_write_file, e.getMessage())));

@@ -7,6 +7,7 @@ import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.os.Build;
 import android.provider.DocumentsContract;
+import android.provider.DocumentsContract.Document;
 import android.provider.DocumentsProvider;
 
 import androidx.annotation.DrawableRes;
@@ -30,12 +31,12 @@ public abstract class BaseProvider extends DocumentsProvider {
     };
 
     protected static final String[] DEFAULT_DOCUMENT_PROJECTION = new String[]{
-            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            DocumentsContract.Document.COLUMN_MIME_TYPE,
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
-            DocumentsContract.Document.COLUMN_FLAGS,
-            DocumentsContract.Document.COLUMN_SIZE
+            Document.COLUMN_DOCUMENT_ID,
+            Document.COLUMN_MIME_TYPE,
+            Document.COLUMN_DISPLAY_NAME,
+            Document.COLUMN_LAST_MODIFIED,
+            Document.COLUMN_FLAGS,
+            Document.COLUMN_SIZE
     };
 
     protected final String root;
@@ -71,7 +72,7 @@ public abstract class BaseProvider extends DocumentsProvider {
                 .add(DocumentsContract.Root.COLUMN_ROOT_ID, root)
                 .add(DocumentsContract.Root.COLUMN_FLAGS, rootFlags)
                 .add(DocumentsContract.Root.COLUMN_TITLE, root)
-                .add(DocumentsContract.Root.COLUMN_MIME_TYPES, DOCUMENT_MIME_TYPE)
+                .add(DocumentsContract.Root.COLUMN_MIME_TYPES, Document.MIME_TYPE_DIR + "\n" + DOCUMENT_MIME_TYPE)
                 .add(DocumentsContract.Root.COLUMN_AVAILABLE_BYTES, baseDir.getFreeSpace())
                 .add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, root)
                 .add(DocumentsContract.Root.COLUMN_ICON, iconResId);
@@ -107,14 +108,20 @@ public abstract class BaseProvider extends DocumentsProvider {
     }
 
     protected void includeFile(MatrixCursor result, String documentId, File file) {
-        result.newRow()
-                .add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, documentId)
-                .add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, file.getName())
-                .add(DocumentsContract.Document.COLUMN_SIZE, file.length())
-                .add(DocumentsContract.Document.COLUMN_LAST_MODIFIED, file.lastModified())
-                .add(DocumentsContract.Document.COLUMN_ICON, iconResId)
-                .add(DocumentsContract.Document.COLUMN_FLAGS, documentFlags)
-                .add(DocumentsContract.Document.COLUMN_MIME_TYPE, DOCUMENT_MIME_TYPE);
+        MatrixCursor.RowBuilder row = result.newRow()
+                .add(Document.COLUMN_DOCUMENT_ID, documentId)
+                .add(Document.COLUMN_DISPLAY_NAME, file.getName())
+                .add(Document.COLUMN_SIZE, file.length())
+                .add(Document.COLUMN_LAST_MODIFIED, file.lastModified())
+                .add(Document.COLUMN_ICON, iconResId);
+
+        if (file.isDirectory()) {
+            row.add(Document.COLUMN_FLAGS, Document.FLAG_DIR_SUPPORTS_CREATE);
+            row.add(Document.COLUMN_MIME_TYPE, Document.MIME_TYPE_DIR);
+        } else {
+            row.add(Document.COLUMN_FLAGS, documentFlags);
+            row.add(Document.COLUMN_MIME_TYPE, DOCUMENT_MIME_TYPE);
+        }
     }
 
     protected String getDocIdForFile(File file) {

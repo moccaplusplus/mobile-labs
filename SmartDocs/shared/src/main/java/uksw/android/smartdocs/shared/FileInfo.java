@@ -1,5 +1,6 @@
 package uksw.android.smartdocs.shared;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static uksw.android.smartdocs.shared.Tcp.readString;
 import static uksw.android.smartdocs.shared.Tcp.writeString;
 
@@ -9,6 +10,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Date;
 
 public class FileInfo {
     public static FileInfo read(DataInputStream in) throws IOException {
@@ -24,22 +26,33 @@ public class FileInfo {
         out.writeLong(file.exists() ? file.length() : -1L);
     }
 
+    public static void writeRemoved(DataOutputStream out, String name, long dirtyTimestamp) throws IOException {
+        writeString(out, name);
+        out.writeLong(dirtyTimestamp);
+        out.writeLong(-1L);
+    }
+
     public static void writeFileWithContents(DataOutputStream out, File file) throws IOException {
         writeFile(out, file);
         writeContents(out, file);
     }
 
-    public static boolean readContents(DataInputStream in, File file) throws IOException {
-        long length = in.readLong();
-        if (length == -1) {
-            return false;
-        }
+    public static void readContents(DataInputStream in, long length, File file) throws IOException {
         try (FileOutputStream fos = new FileOutputStream(file)) {
             while (length-- > 0) {
                 fos.write(in.read());
             }
         }
-        return true;
+    }
+
+    public static void appendConflictInfo(DataInputStream in, FileInfo fileInfo, File file) throws IOException {
+        try (FileOutputStream fos = new FileOutputStream(file, true)) {
+            fos.write(String.format("\n=== CONFLICT\n=== VERSION: $1%s\n",
+                    new Date(fileInfo.lastModified)).getBytes(UTF_8));
+            for (int i = 0; i < fileInfo.length; i++) {
+                fos.write(in.read());
+            }
+        }
     }
 
     public static void writeContents(DataOutputStream out, File file) throws IOException {
@@ -61,11 +74,5 @@ public class FileInfo {
         this.name = name;
         this.lastModified = lastModified;
         this.length = length;
-    }
-
-    public void write(DataOutputStream out) throws IOException {
-        writeString(out, name);
-        out.writeLong(lastModified);
-        out.writeLong(length);
     }
 }

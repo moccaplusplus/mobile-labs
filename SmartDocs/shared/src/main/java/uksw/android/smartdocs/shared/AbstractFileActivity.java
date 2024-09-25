@@ -51,6 +51,7 @@ public abstract class AbstractFileActivity extends AppCompatActivity {
     }
 
     protected void readFile() {
+        contentsView.setText("");
         new Thread(this::readFileInBackground).start();
     }
 

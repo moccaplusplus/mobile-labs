@@ -71,7 +71,7 @@ public class ServerService extends Service {
         }
     };
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
-    private final File baseDir = new File(getFilesDir(), ServerProvider.ROOT);
+    private File baseDir;
     private TcpServer tcpServer;
     private UdpServer udpServer;
     private int status = STATUS_STOPPED;
@@ -80,6 +80,7 @@ public class ServerService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        baseDir = new File(getFilesDir(), ServerProvider.ROOT);
         int foregroundType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ?
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC : 0;
         ServiceCompat.startForeground(this, FOREGROUND_ID, createNotification(), foregroundType);
@@ -185,15 +186,14 @@ public class ServerService extends Service {
         FileInfo fileInfo = FileInfo.read(in);
         File file = new File(baseDir, fileInfo.name);
         if (!file.exists() || file.lastModified() < fileInfo.lastModified) {
-            readContents(in, file);
+            readContents(in, fileInfo.length, file);
             file.setLastModified(fileInfo.lastModified);
             out.writeByte(MSG_OK);
             out.writeLong(fileInfo.lastModified);
             notifyFileChange(file);
         } else {
-            // TODO: apply patch
-            out.writeByte(MSG_OK);
-            out.writeLong(file.lastModified());
+            out.writeByte(MSG_CONFLICT);
+            FileInfo.writeFile(out, file);
         }
     }
 
@@ -225,22 +225,32 @@ public class ServerService extends Service {
         }
         out.writeByte(MSG_OK);
         out.writeLong(file.lastModified());
+        out.writeLong(file.length());
         writeContents(out, file);
     }
 
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     private void syncRequest(DataOutputStream out, DataInputStream in) throws Exception {
         int count = in.readInt();
         while (count-- > 0) {
             FileInfo fileInfo = FileInfo.read(in);
             File file = new File(baseDir, fileInfo.name);
-            if (file.lastModified() < fileInfo.lastModified) {
-                if (!FileInfo.readContents(in, file) || file.delete()) {
+
+            if (fileInfo.length == -1) {
+                if (file.exists() && file.lastModified() < fileInfo.lastModified && file.delete()) {
                     notifyFileChange(file);
                 }
             } else {
-                // TODO: apply patch - ignore for now.
+                if (!file.exists() || file.lastModified() < fileInfo.lastModified) {
+                    FileInfo.readContents(in, fileInfo.length, file);
+                    notifyFileChange(file);
+                } else {
+                    // TODO: apply patch - for now just skip and ignore outdated content
+                    in.skip(fileInfo.length);
+                }
             }
         }
+
         out.writeByte(MSG_OK);
         String[] list = baseDir.list();
         if (list == null || list.length == 0) {

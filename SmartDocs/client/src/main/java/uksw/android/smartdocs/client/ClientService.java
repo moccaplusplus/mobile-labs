@@ -1,5 +1,6 @@
 package uksw.android.smartdocs.client;
 
+import static uksw.android.smartdocs.shared.Tcp.MSG_CONFLICT;
 import static uksw.android.smartdocs.shared.Tcp.MSG_CREATE_FILE;
 import static uksw.android.smartdocs.shared.Tcp.MSG_ERROR;
 import static uksw.android.smartdocs.shared.Tcp.MSG_GET_CONTENTS;
@@ -59,16 +60,18 @@ public class ClientService extends Service {
     }
 
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
-    private final Metadata metadata = Metadata.get(this);
-    private final File baseDir = new File(getFilesDir(), ClientProvider.ROOT);
     private final BinderImpl binder = new BinderImpl(this);
     private final Collection<StatusListener> statusListeners = new LinkedHashSet<>();
+    private Metadata metadata;
+    private File baseDir;
     private UdpClient udpClient;
     private TcpClient tcpClient;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        metadata = Metadata.get(this);
+        baseDir = new File(getFilesDir(), ClientProvider.ROOT);
         udpClient = new UdpClient(this, uiHandler,
                 this::onHandshake, this::applyUpdate, this::onUdpError);
         tcpClient = new TcpClient(
@@ -246,6 +249,10 @@ public class ClientService extends Service {
                         long timestamp = in.readLong();
                         metadata.unmarkDirty(file.getName());
                         file.setLastModified(timestamp);
+                    } else if (type == MSG_CONFLICT) {
+                        FileInfo fileInfo = FileInfo.read(in);
+                        FileInfo.appendConflictInfo(in, fileInfo, file);
+                        notifyFileChange(file);
                     } else if (type == MSG_ERROR) {
                         throw new IOException(readString(in));
                     } else {
@@ -260,7 +267,7 @@ public class ClientService extends Service {
         tcpClient.session(
                 (out, in) -> {
                     out.writeByte(MSG_REMOVE_FILE);
-                    FileInfo.writeFile(out, file);
+                    FileInfo.writeRemoved(out, file.getName(), metadata.getDirtyTimestamp(file.getName()));
 
                     int type = in.readByte();
                     if (type == MSG_OK) {
@@ -270,6 +277,7 @@ public class ClientService extends Service {
                         file.createNewFile();
                         metadata.unmarkDirty(file.getName());
                         file.setLastModified(timestamp);
+                        notifyFileChange(file);
                     } else if (type == MSG_ERROR) {
                         throw new IOException(readString(in));
                     } else {
